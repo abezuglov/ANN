@@ -17,16 +17,18 @@ import load_datasets as ld
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_float('learning_rate', 0.1, 'Initial learning rate')
+flags.DEFINE_float('learning_rate', 0.08, 'Initial learning rate')
 flags.DEFINE_float('learning_rate_decay', 0.1, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
-flags.DEFINE_integer('max_steps', 200000, 'Number of steps to run trainer')
-flags.DEFINE_integer('batch_size', 25*193, 'Batch size. Divides evenly into the dataset size of 193')
-flags.DEFINE_integer('hidden1', 40, 'Size of the first hidden layer')
-flags.DEFINE_integer('hidden2', 20, 'Size of the second hidden layer')
-flags.DEFINE_integer('hidden3', 10, 'Size of the second third layer')
+flags.DEFINE_integer('max_steps', 20000, 'Number of steps to run trainer')
+flags.DEFINE_integer('batch_size', 50*193, 'Batch size. Divides evenly into the dataset size of 193')
+flags.DEFINE_integer('hidden1', 15, 'Size of the first hidden layer')
+flags.DEFINE_integer('hidden2', 8, 'Size of the second hidden layer')
+flags.DEFINE_integer('hidden3', 3, 'Size of the third hidden layer')
 flags.DEFINE_string('train_dir', './data/', 'Directory to put the training data') # not currently used
 flags.DEFINE_string('checkpoints_dir', './checkpoints/', 'Directory to store checkpoints')
 flags.DEFINE_string('summaries_dir','./logs/','Summaries directory')
+flags.DEFINE_string('checkpoints_dir', './checkpoints/three-layer/'+dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'Directory to store checkpoints')
+flags.DEFINE_string('summaries_dir','./logs/three-layer/'+dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),'Summaries directory')
 
 def accuracy_mse(predictions, outputs):
     err = predictions-outputs
@@ -66,6 +68,10 @@ def variable_summaries(var, name):
     tf.scalar_summary('mean/'+name, mean)
     stddev = tf.reduce_mean(tf.reduce_sum(tf.square(var-mean)))
     tf.scalar_summary('stddev/'+name, stddev)
+    _min = tf.reduce_min(var)
+    tf.scalar_summary('min/'+name, _min)
+    _max = tf.reduce_max(var)
+    tf.scalar_summary('max/'+name, _max)
     tf.histogram_summary(name, var)
 
 def run_training():
@@ -95,24 +101,26 @@ def run_training():
   
         input_layer_output = tf.sigmoid(tf.matmul(tf_train_dataset, weights_0) + biases_0)
         hidden_layer_output = tf.sigmoid(tf.matmul(input_layer_output, weights_1) + biases_1)
-        #hidden_layer_output = tf.nn.dropout(hidden_layer_output, 0.5)
+        #hidden_layer_output = tf.nn.dropout(hidden_layer_output, 0.8)
         hidden_layer_output = tf.sigmoid(tf.matmul(hidden_layer_output, weights_2) + biases_2)
         hidden_layer_output = tf.matmul(hidden_layer_output, weights_3) + biases_3
         train_prediction = hidden_layer_output
-
-        #loss = tf.placeholder(tf.float32)
-        loss = tf.cast(tf.reduce_mean(tf.reduce_mean(tf.square(train_prediction-tf_train_labels))),tf.float32)
         
-        tf.scalar_summary("Loss MSE", loss)
+        prediction_diff = train_prediction-tf_train_labels
+        variable_summaries(prediction_diff, 'prediction errors (negative -- underprediction)')
+
+        loss = tf.cast(tf.reduce_mean(tf.reduce_mean(tf.square(prediction_diff))),tf.float32)
+        variable_summaries(loss, 'training MSE')
+        #tf.scalar_summary("Loss MSE", loss)
         global_step = tf.Variable(0.00, trainable=False)
         learning_rate = tf.train.exponential_decay(FLAGS.learning_rate, 
                                                    global_step, FLAGS.max_steps, 
                                                    FLAGS.learning_rate_decay, staircase=False)
         
-        tf.scalar_summary("Learning rate", learning_rate)
-        optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=global_step)
+        #tf.scalar_summary("Learning rate", learning_rate)
+        #optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=global_step)
         #optimizer = tf.train.AdagradOptimizer(learning_rate).minimize(loss, global_step=global_step)
-        #optimizer = tf.train.AdamOptimizer(learning_rate).minimize(loss, global_step=global_step)
+        optimizer = tf.train.AdamOptimizer(learning_rate).minimize(loss, global_step=global_step)
   
         valid_prediction = tf.sigmoid(tf.matmul(tf_valid_dataset, weights_0) + biases_0)
         valid_prediction = tf.sigmoid(tf.matmul(valid_prediction, weights_1) + biases_1)
@@ -156,12 +164,12 @@ def run_training():
 
 
 def main(argv):
-    if tf.gfile.Exists(FLAGS.summaries_dir):
-        tf.gfile.DeleteRecursively(FLAGS.summaries_dir)
-    tf.gfile.MakeDirs(FLAGS.summaries_dir)
-    if tf.gfile.Exists(FLAGS.checkpoints_dir):
-        tf.gfile.DeleteRecursively(FLAGS.checkpoints_dir)
-    tf.gfile.MakeDirs(FLAGS.checkpoints_dir)
+    #if tf.gfile.Exists(FLAGS.summaries_dir):
+    #    tf.gfile.DeleteRecursively(FLAGS.summaries_dir)
+    #tf.gfile.MakeDirs(FLAGS.summaries_dir)
+    #if tf.gfile.Exists(FLAGS.checkpoints_dir):
+    #    tf.gfile.DeleteRecursively(FLAGS.checkpoints_dir)
+    #tf.gfile.MakeDirs(FLAGS.checkpoints_dir)
 
     run_training()
 
