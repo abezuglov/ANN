@@ -148,7 +148,7 @@ def run_training():
             #    saver.save(sess, FLAGS.checkpoints_dir, global_step = step)
             if (step % 1000 == 0):
                 print('Validation MSE: %.5f' % (do_eval(sess, valid_prediction, _, valid_dataset)))
-        print('Test RMSE: %.5f' % do_eval(sess, test_prediction, _, test_dataset))
+        print('Test MSE: %.5f' % do_eval(sess, test_prediction, _, test_dataset))
         predicted_vs_actual = np.hstack((test_prediction.eval(session = sess), test_dataset.outputs))
         print("correlation coefficients: ")
         print(np.corrcoef(predicted_vs_actual[:,0],predicted_vs_actual[:,2]))

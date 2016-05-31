@@ -12,6 +12,7 @@ from six.moves.urllib.request import urlretrieve
 from six.moves import cPickle as pickle
 import tensorflow as tf
 import load_datasets as ld
+import datetime as dt
 
 
 flags = tf.app.flags
@@ -25,8 +26,6 @@ flags.DEFINE_integer('hidden1', 15, 'Size of the first hidden layer')
 flags.DEFINE_integer('hidden2', 8, 'Size of the second hidden layer')
 flags.DEFINE_integer('hidden3', 3, 'Size of the third hidden layer')
 flags.DEFINE_string('train_dir', './data/', 'Directory to put the training data') # not currently used
-flags.DEFINE_string('checkpoints_dir', './checkpoints/', 'Directory to store checkpoints')
-flags.DEFINE_string('summaries_dir','./logs/','Summaries directory')
 flags.DEFINE_string('checkpoints_dir', './checkpoints/three-layer/'+dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'Directory to store checkpoints')
 flags.DEFINE_string('summaries_dir','./logs/three-layer/'+dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),'Summaries directory')
 
@@ -156,7 +155,7 @@ def run_training():
             #    saver.save(sess, FLAGS.checkpoints_dir, global_step = step)
             if (step % 1000 == 0):
                 print('Validation MSE: %.5f' % (do_eval(sess, valid_prediction, _, valid_dataset)))
-        print('Test RMSE: %.5f' % do_eval(sess, test_prediction, _, test_dataset))
+        print('Test MSE: %.5f' % do_eval(sess, test_prediction, _, test_dataset))
         predicted_vs_actual = np.hstack((test_prediction.eval(session = sess), test_dataset.outputs))
         print("correlation coefficients: ")
         print(np.corrcoef(predicted_vs_actual[:,0],predicted_vs_actual[:,2]))
