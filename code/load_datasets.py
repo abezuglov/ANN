@@ -95,6 +95,9 @@ class Dataset(object):
         end = self._index_in_epoch
         return self._inputs[start:end], self.outputs[start:end]
 
+    def get_full(self):
+        return self._inputs, self.outputs
+
 # Reshape the data and normalize
 def normalize(x, means, stds):
     return (x-means)/stds

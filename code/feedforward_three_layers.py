@@ -20,12 +20,14 @@ FLAGS = flags.FLAGS
 
 flags.DEFINE_float('learning_rate', 0.08, 'Initial learning rate')
 flags.DEFINE_float('learning_rate_decay', 0.1, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
-flags.DEFINE_integer('max_steps', 20000, 'Number of steps to run trainer')
+flags.DEFINE_integer('max_steps', 1000, 'Number of steps to run trainer')
 flags.DEFINE_integer('batch_size', 50*193, 'Batch size. Divides evenly into the dataset size of 193')
 flags.DEFINE_integer('hidden1', 15, 'Size of the first hidden layer')
 flags.DEFINE_integer('hidden2', 8, 'Size of the second hidden layer')
 flags.DEFINE_integer('hidden3', 3, 'Size of the third hidden layer')
-flags.DEFINE_string('train_dir', './data/', 'Directory to put the training data') # not currently used
+flags.DEFINE_integer('output_vars', 2, 'Size of the output layer')
+flags.DEFINE_integer('input_vars', 6, 'Size of the input layer')
+#flags.DEFINE_string('train_dir', './data/', 'Directory to put the training data') # not currently used
 flags.DEFINE_string('checkpoints_dir', './checkpoints/three-layer/'+dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'Directory to store checkpoints')
 flags.DEFINE_string('summaries_dir','./logs/three-layer/'+dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),'Summaries directory')
 
@@ -35,12 +37,16 @@ def accuracy_mse(predictions, outputs):
 
 def placeholder_inputs(batch_size):
 #Generate placeholder variables to represent input tensors
-    tf_train_inputs = tf.placeholder(tf.float32, shape=(batch_size, 6)) #train_dataset2.shape(2)
-    tf_train_outputs = tf.placeholder(tf.float32, shape=(batch_size, 2))
+    if batch_size is None:
+        tf_train_inputs = tf.placeholder(tf.float32, shape=(None, 6)) #train_dataset2.shape(2)
+        tf_train_outputs = tf.placeholder(tf.float32, shape=(None, 2))
+    else:
+        tf_train_inputs = tf.placeholder(tf.float32, shape=(batch_size, 6)) #train_dataset2.shape(2)
+        tf_train_outputs = tf.placeholder(tf.float32, shape=(batch_size, 2))
     return tf_train_inputs, tf_train_outputs
 
 def fill_feed_dict(data_set, inputs_pl, outputs_pl):
-    inputs, outputs = data_set.next_batch(FLAGS.batch_size)
+    inputs, outputs = data_set.get_full()#next_batch(FLAGS.batch_size)
     feed_dict = {
         inputs_pl: inputs,
         outputs_pl: outputs
@@ -62,6 +68,14 @@ def do_eval(sess,
     #    print("do_eval run: %.6f" % accuracy_mse(data_set.inputs.eval(session = sess), data_set.outputs))
     return accuracy_mse(inputs_pl.eval(session = sess), data_set.outputs)
 
+def weight_variable(shape):
+    initial = tf.truncated_normal(shape, stddev = 0.1)
+    return tf.Variable(initial)
+
+def bias_variable(shape):
+    initial = tf.constant(0.1, shape = shape)
+    return tf.Variable(initial)
+
 def variable_summaries(var, name):
     mean = tf.reduce_mean(var)
     tf.scalar_summary('mean/'+name, mean)
@@ -73,64 +87,53 @@ def variable_summaries(var, name):
     tf.scalar_summary('max/'+name, _max)
     tf.histogram_summary(name, var)
 
+def nn_layer(input_tensor, input_dim, output_dim, layer_name, act = tf.sigmoid):
+    with tf.name_scope(layer_name):
+        with tf.name_scope('weights'):
+            weights = weight_variable([input_dim, output_dim])
+            variable_summaries(weights, layer_name+'/weights')
+        with tf.name_scope('biases'):
+            biases = bias_variable([output_dim])
+            variable_summaries(biases, layer_name+'/biases')
+        with tf.name_scope('WX_plus_b'):
+            preactivate = tf.matmul(input_tensor, weights)+biases
+            tf.histogram_summary(layer_name+'/pre_activations', preactivate)
+        if act is not None:
+            activations = act(preactivate, 'activation')
+        else:
+            activations = preactivate
+        tf.histogram_summary(layer_name+'/activations', activations)
+    return activations
+
 def run_training():
     train_dataset, valid_dataset, test_dataset = ld.read_data_sets()
     with tf.Graph().as_default():
-        tf_train_dataset, tf_train_labels = placeholder_inputs(FLAGS.batch_size)
-        tf_valid_dataset = tf.constant(valid_dataset.inputs)
-        tf_test_dataset = tf.constant(test_dataset.inputs)
+        with tf.name_scope('input'):
+            x = tf.placeholder(tf.float32, [None, FLAGS.input_vars], name='x-input')
+            y_ = tf.placeholder(tf.float32, [None, FLAGS.output_vars], name = 'y-input')
+        #tf_valid_dataset = tf.constant(valid_dataset.inputs)
+        #tf_test_dataset = tf.constant(test_dataset.inputs)
   
-        hidden_nodes_1 = FLAGS.hidden1
-        hidden_nodes_2 = FLAGS.hidden2
-        hidden_nodes_3 = FLAGS.hidden3
-
-        weights_0 = tf.Variable(tf.truncated_normal([6,hidden_nodes_1], dtype = tf.float32))
-        biases_0 = tf.Variable(tf.zeros([hidden_nodes_1], dtype = tf.float32))
-
-        weights_1 = tf.Variable(tf.truncated_normal([hidden_nodes_1,hidden_nodes_2], dtype = tf.float32))
-        biases_1 = tf.Variable(tf.zeros([hidden_nodes_2], dtype = tf.float32))
-
-        weights_2 = tf.Variable(tf.truncated_normal([hidden_nodes_2,hidden_nodes_3], dtype = tf.float32))
-        biases_2 = tf.Variable(tf.zeros([hidden_nodes_3], dtype = tf.float32))
-
-        weights_3 = tf.Variable(tf.truncated_normal([hidden_nodes_3,2], dtype = tf.float32))
-        variable_summaries(weights_3, 'layer 3 weights')
-        biases_3 = tf.Variable(tf.zeros([2], dtype = tf.float32))
-        variable_summaries(biases_3, 'layer 3 biases')
-  
-        input_layer_output = tf.sigmoid(tf.matmul(tf_train_dataset, weights_0) + biases_0)
-        hidden_layer_output = tf.sigmoid(tf.matmul(input_layer_output, weights_1) + biases_1)
-        #hidden_layer_output = tf.nn.dropout(hidden_layer_output, 0.8)
-        hidden_layer_output = tf.sigmoid(tf.matmul(hidden_layer_output, weights_2) + biases_2)
-        hidden_layer_output = tf.matmul(hidden_layer_output, weights_3) + biases_3
-        train_prediction = hidden_layer_output
+        hidden_1 = nn_layer(x, FLAGS.input_vars, FLAGS.hidden1, 'layer1')
+        hidden_2 = nn_layer(hidden_1, FLAGS.hidden1, FLAGS.hidden2, 'layer2')
+        hidden_3 = nn_layer(hidden_2, FLAGS.hidden2, FLAGS.hidden3, 'layer3')      
+        train_prediction = nn_layer(hidden_3, FLAGS.hidden3, FLAGS.output_vars, 'output', act = None)      
         
-        prediction_diff = train_prediction-tf_train_labels
-        variable_summaries(prediction_diff, 'prediction errors (negative -- underprediction)')
+        with tf.name_scope('MSE'):
+            prediction_diff = train_prediction-y_
+            MSE = tf.cast(tf.reduce_mean(tf.reduce_mean(tf.square(prediction_diff))),tf.float32)
+            tf.scalar_summary('MSE', MSE)
 
-        loss = tf.cast(tf.reduce_mean(tf.reduce_mean(tf.square(prediction_diff))),tf.float32)
-        variable_summaries(loss, 'training MSE')
-        #tf.scalar_summary("Loss MSE", loss)
-        global_step = tf.Variable(0.00, trainable=False)
-        learning_rate = tf.train.exponential_decay(FLAGS.learning_rate, 
-                                                   global_step, FLAGS.max_steps, 
-                                                   FLAGS.learning_rate_decay, staircase=False)
-        
-        #tf.scalar_summary("Learning rate", learning_rate)
-        #optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=global_step)
-        #optimizer = tf.train.AdagradOptimizer(learning_rate).minimize(loss, global_step=global_step)
-        optimizer = tf.train.AdamOptimizer(learning_rate).minimize(loss, global_step=global_step)
-  
-        valid_prediction = tf.sigmoid(tf.matmul(tf_valid_dataset, weights_0) + biases_0)
-        valid_prediction = tf.sigmoid(tf.matmul(valid_prediction, weights_1) + biases_1)
-        valid_prediction = tf.sigmoid(tf.matmul(valid_prediction, weights_2) + biases_2)
-        valid_prediction = tf.matmul(valid_prediction, weights_3) + biases_3
-    
-        test_prediction = tf.sigmoid(tf.matmul(tf_test_dataset, weights_0) + biases_0)
-        test_prediction = tf.sigmoid(tf.matmul(test_prediction, weights_1) + biases_1)
-        test_prediction = tf.sigmoid(tf.matmul(test_prediction, weights_2) + biases_2)
-        test_prediction = tf.matmul(test_prediction, weights_3) + biases_3
-
+        with tf.name_scope('train'):
+            global_step = tf.Variable(0.00, trainable=False)
+            learning_rate = tf.train.exponential_decay(FLAGS.learning_rate, 
+                                                       global_step, FLAGS.max_steps, 
+                                                       FLAGS.learning_rate_decay, staircase=False)        
+            #optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=global_step)
+            #optimizer = tf.train.AdagradOptimizer(learning_rate).minimize(loss, global_step=global_step)
+            optimizer = tf.train.AdamOptimizer(learning_rate).minimize(
+                MSE, global_step=global_step)
+                  
         merged = tf.merge_all_summaries()
         init = tf.initialize_all_variables()
         saver = tf.train.Saver()
@@ -141,25 +144,27 @@ def run_training():
         for step in xrange(FLAGS.max_steps):
             start_time = time.time()
 
-            feed_dict = fill_feed_dict(train_dataset,
-                                       tf_train_dataset,
-                                       tf_train_labels)
-            _, l, lr, summary, predictions = sess.run([optimizer, loss, learning_rate, merged, train_prediction],feed_dict=feed_dict)
+            feed_dict = fill_feed_dict(train_dataset, x, y_)
+            _, train_loss, lr, summary = sess.run([optimizer, MSE, learning_rate, merged], feed_dict=feed_dict)
             duration = time.time()-start_time
-            if (step % 10 == 0):
-                summary_writer.add_summary(summary,step)
-                summary_writer.flush()
-            if (step % 100 == 0):
-                print('Step %d: Train MSE: %.5f (%d op/sec), learning rate: %.6f' % (step, l, 1/duration, lr))
-            #if (step+1)%1000 == 0 or (step+1)==FLAGS.max_steps:
-            #    saver.save(sess, FLAGS.checkpoints_dir, global_step = step)
-            if (step % 1000 == 0):
-                print('Validation MSE: %.5f' % (do_eval(sess, valid_prediction, _, valid_dataset)))
-        print('Test MSE: %.5f' % do_eval(sess, test_prediction, _, test_dataset))
-        predicted_vs_actual = np.hstack((test_prediction.eval(session = sess), test_dataset.outputs))
-        print("correlation coefficients: ")
-        print(np.corrcoef(predicted_vs_actual[:,0],predicted_vs_actual[:,2]))
-        print(np.corrcoef(predicted_vs_actual[:,1],predicted_vs_actual[:,3]))
+            #print('Step %d: Train MSE: %.5f (%d op/sec), learning rate: %.6f' % (step, loss, 1/duration, lr))
+
+            if step%10 == 0:
+                feed_dict = fill_feed_dict(valid_dataset, x, y_)
+                valid_loss, summary = sess.run([MSE, merged], feed_dict = feed_dict)
+                print('Step %d (%d op/sec): Train MSE: %.5f, Validation MSE: %.5f' % (step, 1/duration, train_loss, valid_loss))
+ 
+            summary_writer.add_summary(summary,step)
+            summary_writer.flush()
+            
+        feed_dict = fill_feed_dict(test_dataset, x, y_)
+        test_loss, summary = sess.run([MSE, merged], feed_dict = feed_dict)
+        print('Test MSE: %.5f' % (test_loss))
+        
+        #predicted_vs_actual = np.hstack((test_prediction.eval(session = sess), test_dataset.outputs))
+        #print("correlation coefficients: ")
+        #print(np.corrcoef(predicted_vs_actual[:,0],predicted_vs_actual[:,2]))
+        #print(np.corrcoef(predicted_vs_actual[:,1],predicted_vs_actual[:,3]))
 
 
 def main(argv):
