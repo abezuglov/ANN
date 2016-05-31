@@ -18,9 +18,9 @@ import datetime as dt
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_float('learning_rate', 0.08, 'Initial learning rate')
+flags.DEFINE_float('learning_rate', 0.1, 'Initial learning rate')
 flags.DEFINE_float('learning_rate_decay', 0.1, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
-flags.DEFINE_integer('max_steps', 1000, 'Number of steps to run trainer')
+flags.DEFINE_integer('max_steps', 1500, 'Number of steps to run trainer')
 flags.DEFINE_integer('batch_size', 50*193, 'Batch size. Divides evenly into the dataset size of 193')
 flags.DEFINE_integer('hidden1', 15, 'Size of the first hidden layer')
 flags.DEFINE_integer('hidden2', 8, 'Size of the second hidden layer')
@@ -111,8 +111,6 @@ def run_training():
         with tf.name_scope('input'):
             x = tf.placeholder(tf.float32, [None, FLAGS.input_vars], name='x-input')
             y_ = tf.placeholder(tf.float32, [None, FLAGS.output_vars], name = 'y-input')
-        #tf_valid_dataset = tf.constant(valid_dataset.inputs)
-        #tf_test_dataset = tf.constant(test_dataset.inputs)
   
         hidden_1 = nn_layer(x, FLAGS.input_vars, FLAGS.hidden1, 'layer1')
         hidden_2 = nn_layer(hidden_1, FLAGS.hidden1, FLAGS.hidden2, 'layer2')
@@ -138,24 +136,26 @@ def run_training():
         init = tf.initialize_all_variables()
         saver = tf.train.Saver()
         sess = tf.Session()
-        summary_writer = tf.train.SummaryWriter(FLAGS.summaries_dir, sess.graph)
+        train_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/train', sess.graph)
+        test_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/validation', sess.graph)
         sess.run(init)
         
         for step in xrange(FLAGS.max_steps):
             start_time = time.time()
-
-            feed_dict = fill_feed_dict(train_dataset, x, y_)
-            _, train_loss, lr, summary = sess.run([optimizer, MSE, learning_rate, merged], feed_dict=feed_dict)
-            duration = time.time()-start_time
-            #print('Step %d: Train MSE: %.5f (%d op/sec), learning rate: %.6f' % (step, loss, 1/duration, lr))
-
-            if step%10 == 0:
+           
+            if step%10 != 0:
+                # regular training
+                feed_dict = fill_feed_dict(train_dataset, x, y_)
+                _, train_loss, lr, summary = sess.run([optimizer, MSE, learning_rate, merged], feed_dict=feed_dict)
+                train_writer.add_summary(summary,step)
+            else:
+                # check model fit
                 feed_dict = fill_feed_dict(valid_dataset, x, y_)
                 valid_loss, summary = sess.run([MSE, merged], feed_dict = feed_dict)
-                print('Step %d (%d op/sec): Train MSE: %.5f, Validation MSE: %.5f' % (step, 1/duration, train_loss, valid_loss))
+                test_writer.add_summary(summary,step)
+                duration = time.time()-start_time
+                print('Step %d (%d op/sec): Validation MSE: %.5f' % (step, 1/duration, valid_loss))
  
-            summary_writer.add_summary(summary,step)
-            summary_writer.flush()
             
         feed_dict = fill_feed_dict(test_dataset, x, y_)
         test_loss, summary = sess.run([MSE, merged], feed_dict = feed_dict)
@@ -168,12 +168,12 @@ def run_training():
 
 
 def main(argv):
-    #if tf.gfile.Exists(FLAGS.summaries_dir):
-    #    tf.gfile.DeleteRecursively(FLAGS.summaries_dir)
-    #tf.gfile.MakeDirs(FLAGS.summaries_dir)
-    #if tf.gfile.Exists(FLAGS.checkpoints_dir):
-    #    tf.gfile.DeleteRecursively(FLAGS.checkpoints_dir)
-    #tf.gfile.MakeDirs(FLAGS.checkpoints_dir)
+    if tf.gfile.Exists(FLAGS.summaries_dir):
+        tf.gfile.DeleteRecursively(FLAGS.summaries_dir)
+    tf.gfile.MakeDirs(FLAGS.summaries_dir)
+    if tf.gfile.Exists(FLAGS.checkpoints_dir):
+        tf.gfile.DeleteRecursively(FLAGS.checkpoints_dir)
+    tf.gfile.MakeDirs(FLAGS.checkpoints_dir)
 
     run_training()
 
