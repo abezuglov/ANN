@@ -14,7 +14,6 @@ import tensorflow as tf
 import load_datasets as ld
 import datetime as dt
 
-
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
@@ -22,7 +21,7 @@ flags.DEFINE_float('learning_rate', 0.1, 'Initial learning rate')
 flags.DEFINE_float('learning_rate_decay', 0.1, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
 
 flags.DEFINE_integer('max_steps', 2000, 'Number of steps to run trainer')
-flags.DEFINE_float('max_loss', 0.01, 'Maximally acceptable validation MSE')
+flags.DEFINE_float('max_loss', 0.01, 'Max acceptable validation MSE')
 flags.DEFINE_integer('batch_size', 50*193, 'Batch size. Divides evenly into the dataset size of 193')
 flags.DEFINE_integer('hidden1', 15, 'Size of the first hidden layer')
 flags.DEFINE_integer('hidden2', 8, 'Size of the second hidden layer')
@@ -33,14 +32,20 @@ flags.DEFINE_integer('input_vars', 6, 'Size of the input layer')
 flags.DEFINE_string('checkpoints_dir', './checkpoints/three-layer/'+dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'Directory to store checkpoints')
 flags.DEFINE_string('summaries_dir','./logs/three-layer/'+dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),'Summaries directory')
 
-def fill_feed_dict(data_set, inputs_pl, outputs_pl):
+def fill_feed_dict(data_set, inputs_pl, outputs_pl, train):
     """
     Returns feed dictionary for TF. 
     data_set -- dataset
     inputs_pl -- TF placeholder for inputs
     outputs_pl -- TF placeholder for outputs
+    train -- if TRUE, then return DS in batches for training. Otherwise, return the complete DS for validation/testing
     """
-    inputs, outputs = data_set.get_full()
+    if train:
+        batch_size = FLAGS.batch_size
+    else:
+        batch_size = 0
+
+    inputs, outputs = data_set.next_batch(batch_size = batch_size)
     feed_dict = {
         inputs_pl: inputs,
         outputs_pl: outputs
@@ -151,19 +156,19 @@ def run_training():
             start_time = time.time()
             if step%10 != 0:
                 # regular training
-                feed_dict = fill_feed_dict(train_dataset, x, y_)
+                feed_dict = fill_feed_dict(train_dataset, x, y_, train = True)
                 _, train_loss, lr, summary = sess.run([optimizer, MSE, learning_rate, merged], feed_dict=feed_dict)
                 train_writer.add_summary(summary,step)
             else:
                 # check model fit
-                feed_dict = fill_feed_dict(valid_dataset, x, y_)
+                feed_dict = fill_feed_dict(valid_dataset, x, y_, train = False)
                 valid_loss, summary = sess.run([MSE, merged], feed_dict = feed_dict)
                 test_writer.add_summary(summary,step)
                 duration = time.time()-start_time
                 print('Step %d (%d op/sec): Training MSE: %.5f, Validation MSE: %.5f' % (step, 1/duration, train_loss, valid_loss))
             step+=1
             
-        feed_dict = fill_feed_dict(test_dataset, x, y_)
+        feed_dict = fill_feed_dict(test_dataset, x, y_, train = False)
         test_loss, summary = sess.run([MSE, merged], feed_dict = feed_dict)
         print('Test MSE: %.5f' % (test_loss))
         

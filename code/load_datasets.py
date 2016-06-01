@@ -82,24 +82,34 @@ class Dataset(object):
     def epochs_completed(self):
         return self._epochs_completed
 
-    def next_batch(self, batch_size):
-        start = self._index_in_epoch
-        self._index_in_epoch += batch_size
-        if self._index_in_epoch > self._num_examples:
-            self._epochs_completed += 1
-            # shuffle the data (skipped)
-            # start new epoch
-            start = 0
-            self._index_in_epoch = batch_size
-            assert batch_size <= self._num_examples
-        end = self._index_in_epoch
-        return self._inputs[start:end], self.outputs[start:end]
+    def next_batch(self, batch_size = 0):
+        """
+        Returns the next batch of data of size batch_size. If batch_size is not specified or larger than the dataset,
+        the whole dataset is returned. 
+        """
+        if batch_size > 0 and batch_size <= self._num_examples:
+            start = self._index_in_epoch
+            self._index_in_epoch += batch_size
+            if self._index_in_epoch > self._num_examples:
+                self._epochs_completed += 1
+                start = 0
+                self._index_in_epoch = batch_size
+                assert batch_size <= self._num_examples
+            end = self._index_in_epoch
+            return self._inputs[start:end], self.outputs[start:end]
+        else:
+            return self._inputs, self.outputs
 
     def get_full(self):
+        """
+        Returns complete dataset
+        """
         return self._inputs, self.outputs
 
-# Reshape the data and normalize
 def normalize(x, means, stds):
+    """
+    Reshape the data and normalize
+    """
     return (x-means)/stds
 
 def read_data_sets(url_from = 'http://mrtee.europa.renci.org/~bblanton/ANN/', 
@@ -172,5 +182,4 @@ def read_data_sets(url_from = 'http://mrtee.europa.renci.org/~bblanton/ANN/',
     print("Num examples in train %d" % train.num_examples)
     return train, valid, test
 
-# t, v, tst = read_data_sets()
 
