@@ -20,7 +20,9 @@ FLAGS = flags.FLAGS
 
 flags.DEFINE_float('learning_rate', 0.1, 'Initial learning rate')
 flags.DEFINE_float('learning_rate_decay', 0.1, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
-flags.DEFINE_integer('max_steps', 1500, 'Number of steps to run trainer')
+
+flags.DEFINE_integer('max_steps', 2000, 'Number of steps to run trainer')
+flags.DEFINE_float('max_loss', 0.01, 'Maximally acceptable validation MSE')
 flags.DEFINE_integer('batch_size', 50*193, 'Batch size. Divides evenly into the dataset size of 193')
 flags.DEFINE_integer('hidden1', 15, 'Size of the first hidden layer')
 flags.DEFINE_integer('hidden2', 8, 'Size of the second hidden layer')
@@ -31,52 +33,42 @@ flags.DEFINE_integer('input_vars', 6, 'Size of the input layer')
 flags.DEFINE_string('checkpoints_dir', './checkpoints/three-layer/'+dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'Directory to store checkpoints')
 flags.DEFINE_string('summaries_dir','./logs/three-layer/'+dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),'Summaries directory')
 
-def accuracy_mse(predictions, outputs):
-    err = predictions-outputs
-    return np.mean(err*err)
-
-def placeholder_inputs(batch_size):
-#Generate placeholder variables to represent input tensors
-    if batch_size is None:
-        tf_train_inputs = tf.placeholder(tf.float32, shape=(None, 6)) #train_dataset2.shape(2)
-        tf_train_outputs = tf.placeholder(tf.float32, shape=(None, 2))
-    else:
-        tf_train_inputs = tf.placeholder(tf.float32, shape=(batch_size, 6)) #train_dataset2.shape(2)
-        tf_train_outputs = tf.placeholder(tf.float32, shape=(batch_size, 2))
-    return tf_train_inputs, tf_train_outputs
-
 def fill_feed_dict(data_set, inputs_pl, outputs_pl):
-    inputs, outputs = data_set.get_full()#next_batch(FLAGS.batch_size)
+    """
+    Returns feed dictionary for TF. 
+    data_set -- dataset
+    inputs_pl -- TF placeholder for inputs
+    outputs_pl -- TF placeholder for outputs
+    """
+    inputs, outputs = data_set.get_full()
     feed_dict = {
         inputs_pl: inputs,
         outputs_pl: outputs
     }
     return feed_dict
 
-# Runs one evaluation against full epoch of data
-def do_eval(sess,
-            inputs_pl,
-            outputs_pl,
-            data_set):
-    #steps_per_epoch = data_set.num_examples // FLAGS.batch_size
-    #num_examples = steps_per_epoch * FLAGS.batch_size
-    #for step in xrange(steps_per_epoch):
-    #    feed_dict = fill_feed_dict(data_set,
-    #                               inputs_pl,
-    #                               outputs_pl)
-    #    #sess.run(feed_dict = feed_dict)
-    #    print("do_eval run: %.6f" % accuracy_mse(data_set.inputs.eval(session = sess), data_set.outputs))
-    return accuracy_mse(inputs_pl.eval(session = sess), data_set.outputs)
-
 def weight_variable(shape):
+    """
+    Returns TF weight variable with given shape. The weights are normally distributed with mean = 0, stddev = 0.1
+    shape -- shape of the variable, i.e. [4,5] matrix of 4x5
+    """
     initial = tf.truncated_normal(shape, stddev = 0.1)
     return tf.Variable(initial)
 
 def bias_variable(shape):
+    """
+    Returns TF bias variable with given shape. The biases are initially at 0.1
+    shape -- shape of the variable, i.e. [4] -- vector of length 4
+    """
     initial = tf.constant(0.1, shape = shape)
     return tf.Variable(initial)
 
 def variable_summaries(var, name):
+    """
+    Adds multiple summaries (statistics) for a TF variable
+    var -- TF variable
+    name -- variable name
+    """
     mean = tf.reduce_mean(var)
     tf.scalar_summary('mean/'+name, mean)
     stddev = tf.reduce_mean(tf.reduce_sum(tf.square(var-mean)))
@@ -88,6 +80,14 @@ def variable_summaries(var, name):
     tf.histogram_summary(name, var)
 
 def nn_layer(input_tensor, input_dim, output_dim, layer_name, act = tf.sigmoid):
+    """
+    Creates and returns NN layer
+    input_tensor -- TF tensor at layer input
+    input_dim -- size of layer input
+    output_dim -- size of layer output
+    layer_name -- name of the layer for summaries (statistics)
+    act -- nonlinear activation function
+    """
     with tf.name_scope(layer_name):
         with tf.name_scope('weights'):
             weights = weight_variable([input_dim, output_dim])
@@ -106,6 +106,9 @@ def nn_layer(input_tensor, input_dim, output_dim, layer_name, act = tf.sigmoid):
     return activations
 
 def run_training():
+    """
+    Creates a NN and runs its training/running
+    """
     train_dataset, valid_dataset, test_dataset = ld.read_data_sets()
     with tf.Graph().as_default():
         with tf.name_scope('input'):
@@ -140,9 +143,12 @@ def run_training():
         test_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/validation', sess.graph)
         sess.run(init)
         
-        for step in xrange(FLAGS.max_steps):
+        #for step in xrange(FLAGS.max_steps):
+        valid_loss = 1.0
+        train_loss = 1.0
+        step = 0
+        while valid_loss > FLAGS.max_loss and step < FLAGS.max_steps:
             start_time = time.time()
-           
             if step%10 != 0:
                 # regular training
                 feed_dict = fill_feed_dict(train_dataset, x, y_)
@@ -154,8 +160,8 @@ def run_training():
                 valid_loss, summary = sess.run([MSE, merged], feed_dict = feed_dict)
                 test_writer.add_summary(summary,step)
                 duration = time.time()-start_time
-                print('Step %d (%d op/sec): Validation MSE: %.5f' % (step, 1/duration, valid_loss))
- 
+                print('Step %d (%d op/sec): Training MSE: %.5f, Validation MSE: %.5f' % (step, 1/duration, train_loss, valid_loss))
+            step+=1
             
         feed_dict = fill_feed_dict(test_dataset, x, y_)
         test_loss, summary = sess.run([MSE, merged], feed_dict = feed_dict)
