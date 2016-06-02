@@ -20,9 +20,9 @@ FLAGS = flags.FLAGS
 flags.DEFINE_float('learning_rate', 0.1, 'Initial learning rate')
 flags.DEFINE_float('learning_rate_decay', 0.1, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
 
-flags.DEFINE_integer('max_steps', 2000, 'Number of steps to run trainer')
-flags.DEFINE_float('max_loss', 0.01, 'Max acceptable validation MSE')
-flags.DEFINE_integer('batch_size', 50*193, 'Batch size. Divides evenly into the dataset size of 193')
+flags.DEFINE_integer('max_steps', 100, 'Number of steps to run trainer')
+flags.DEFINE_float('max_loss', 0.1, 'Max acceptable validation MSE')
+flags.DEFINE_integer('batch_size', 0*50*193, 'Batch size. Divides evenly into the dataset size of 193')
 flags.DEFINE_integer('hidden1', 15, 'Size of the first hidden layer')
 flags.DEFINE_integer('hidden2', 8, 'Size of the second hidden layer')
 flags.DEFINE_integer('hidden3', 3, 'Size of the third hidden layer')
@@ -137,13 +137,17 @@ def run_training():
                                                        FLAGS.learning_rate_decay, staircase=False)        
             #optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=global_step)
             #optimizer = tf.train.AdagradOptimizer(learning_rate).minimize(loss, global_step=global_step)
-            optimizer = tf.train.AdamOptimizer(learning_rate).minimize(
-                MSE, global_step=global_step)
+            optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+            #optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(MSE, global_step=global_step)
+            gradients = optimizer.compute_gradients(MSE)
+            apply_gradient_op = optimizer.apply_gradients(gradients, global_step = global_step)
                   
         merged = tf.merge_all_summaries()
         init = tf.initialize_all_variables()
         saver = tf.train.Saver()
-        sess = tf.Session()
+        sess = tf.Session(config = tf.ConfigProto(
+            allow_soft_placement = True,
+            log_device_placement = False))
         train_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/train', sess.graph)
         test_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/validation', sess.graph)
         sess.run(init)
@@ -157,7 +161,7 @@ def run_training():
             if step%10 != 0:
                 # regular training
                 feed_dict = fill_feed_dict(train_dataset, x, y_, train = True)
-                _, train_loss, lr, summary = sess.run([optimizer, MSE, learning_rate, merged], feed_dict=feed_dict)
+                _, train_loss, lr, summary = sess.run([apply_gradient_op, MSE, learning_rate, merged], feed_dict=feed_dict)
                 train_writer.add_summary(summary,step)
             else:
                 # check model fit
