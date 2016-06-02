@@ -11,26 +11,16 @@ from sklearn.linear_model import LogisticRegression
 from six.moves.urllib.request import urlretrieve
 from six.moves import cPickle as pickle
 import tensorflow as tf
-import load_datasets as ld
 import datetime as dt
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_float('learning_rate', 0.1, 'Initial learning rate')
-flags.DEFINE_float('learning_rate_decay', 0.1, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
-
-flags.DEFINE_integer('max_steps', 2000, 'Number of steps to run trainer')
-flags.DEFINE_float('max_loss', 0.1, 'Max acceptable validation MSE')
-flags.DEFINE_integer('batch_size', 64*193, 'Batch size. Divides evenly into the dataset size of 193')
 flags.DEFINE_integer('hidden1', 15, 'Size of the first hidden layer')
 flags.DEFINE_integer('hidden2', 8, 'Size of the second hidden layer')
 flags.DEFINE_integer('hidden3', 3, 'Size of the third hidden layer')
 flags.DEFINE_integer('output_vars', 2, 'Size of the output layer')
 flags.DEFINE_integer('input_vars', 6, 'Size of the input layer')
-#flags.DEFINE_string('train_dir', './data/', 'Directory to put the training data') # not currently used
-flags.DEFINE_string('checkpoints_dir', './checkpoints/three-layer/'+dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'Directory to store checkpoints')
-flags.DEFINE_string('summaries_dir','./logs/three-layer/'+dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),'Summaries directory')
 
 def weight_variable(name, shape):
     """
