@@ -20,9 +20,9 @@ FLAGS = flags.FLAGS
 flags.DEFINE_float('learning_rate', 0.1, 'Initial learning rate')
 flags.DEFINE_float('learning_rate_decay', 0.1, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
 
-flags.DEFINE_integer('max_steps', 100, 'Number of steps to run trainer')
+flags.DEFINE_integer('max_steps', 1000, 'Number of steps to run trainer')
 flags.DEFINE_float('max_loss', 0.1, 'Max acceptable validation MSE')
-flags.DEFINE_integer('batch_size', 0*50*193, 'Batch size. Divides evenly into the dataset size of 193')
+flags.DEFINE_integer('batch_size', 128*193, 'Batch size. Divides evenly into the dataset size of 193')
 flags.DEFINE_integer('hidden1', 15, 'Size of the first hidden layer')
 flags.DEFINE_integer('hidden2', 8, 'Size of the second hidden layer')
 flags.DEFINE_integer('hidden3', 3, 'Size of the third hidden layer')
@@ -52,21 +52,25 @@ def fill_feed_dict(data_set, inputs_pl, outputs_pl, train):
     }
     return feed_dict
 
-def weight_variable(shape):
+def weight_variable(name, shape):
     """
     Returns TF weight variable with given shape. The weights are normally distributed with mean = 0, stddev = 0.1
     shape -- shape of the variable, i.e. [4,5] matrix of 4x5
     """
-    initial = tf.truncated_normal(shape, stddev = 0.1)
-    return tf.Variable(initial)
+    with tf.device('/cpu:0'):
+        initial = tf.truncated_normal_initializer(stddev = 0.1)
+        var = tf.get_variable(name, shape, initializer = initial)
+    return var
 
-def bias_variable(shape):
+def bias_variable(name, shape):
     """
     Returns TF bias variable with given shape. The biases are initially at 0.1
     shape -- shape of the variable, i.e. [4] -- vector of length 4
     """
-    initial = tf.constant(0.1, shape = shape)
-    return tf.Variable(initial)
+    with tf.device('/cpu:0'):
+        initial = tf.constant_initializer(0.1)
+        var = tf.get_variable(name, shape, initializer = initial)
+    return var
 
 def variable_summaries(var, name):
     """
@@ -95,10 +99,10 @@ def nn_layer(input_tensor, input_dim, output_dim, layer_name, act = tf.sigmoid):
     """
     with tf.name_scope(layer_name):
         with tf.name_scope('weights'):
-            weights = weight_variable([input_dim, output_dim])
+            weights = weight_variable(layer_name+'/weights',[input_dim, output_dim])
             variable_summaries(weights, layer_name+'/weights')
         with tf.name_scope('biases'):
-            biases = bias_variable([output_dim])
+            biases = bias_variable(layer_name+'/biases',[output_dim])
             variable_summaries(biases, layer_name+'/biases')
         with tf.name_scope('WX_plus_b'):
             preactivate = tf.matmul(input_tensor, weights)+biases
@@ -135,10 +139,7 @@ def run_training():
             learning_rate = tf.train.exponential_decay(FLAGS.learning_rate, 
                                                        global_step, FLAGS.max_steps, 
                                                        FLAGS.learning_rate_decay, staircase=False)        
-            #optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=global_step)
-            #optimizer = tf.train.AdagradOptimizer(learning_rate).minimize(loss, global_step=global_step)
-            optimizer = tf.train.GradientDescentOptimizer(learning_rate)
-            #optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(MSE, global_step=global_step)
+            optimizer = tf.train.AdamOptimizer(learning_rate)
             gradients = optimizer.compute_gradients(MSE)
             apply_gradient_op = optimizer.apply_gradients(gradients, global_step = global_step)
                   
@@ -158,7 +159,7 @@ def run_training():
         step = 0
         while valid_loss > FLAGS.max_loss and step < FLAGS.max_steps:
             start_time = time.time()
-            if step%10 != 0:
+            if step%100 != 0:
                 # regular training
                 feed_dict = fill_feed_dict(train_dataset, x, y_, train = True)
                 _, train_loss, lr, summary = sess.run([apply_gradient_op, MSE, learning_rate, merged], feed_dict=feed_dict)
