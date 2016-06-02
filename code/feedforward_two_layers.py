@@ -21,7 +21,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_float('learning_rate', 0.1, 'Initial learning rate')
 flags.DEFINE_float('learning_rate_decay', 0.1, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
 
-flags.DEFINE_integer('max_steps', 2000, 'Number of steps to run trainer')
+flags.DEFINE_integer('max_steps', 1000, 'Number of steps to run trainer')
 flags.DEFINE_float('max_loss', 0.01, 'Maximally acceptable validation MSE')
 flags.DEFINE_integer('batch_size', 50*193, 'Batch size. Divides evenly into the dataset size of 193')
 flags.DEFINE_integer('hidden1', 35, 'Size of the first hidden layer')
@@ -29,8 +29,8 @@ flags.DEFINE_integer('hidden2', 10, 'Size of the second hidden layer')
 flags.DEFINE_integer('output_vars', 2, 'Size of the output layer')
 flags.DEFINE_integer('input_vars', 6, 'Size of the input layer')
 #flags.DEFINE_string('train_dir', './data/', 'Directory to put the training data') # not currently used
-flags.DEFINE_string('checkpoints_dir', './checkpoints/three-layer/'+dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'Directory to store checkpoints')
-flags.DEFINE_string('summaries_dir','./logs/three-layer/'+dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),'Summaries directory')
+flags.DEFINE_string('checkpoints_dir', './checkpoints/two-layer/'+dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'Directory to store checkpoints')
+flags.DEFINE_string('summaries_dir','./logs/two-layer/'+dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),'Summaries directory')
 
 def fill_feed_dict(data_set, inputs_pl, outputs_pl, train):
     """
@@ -75,13 +75,13 @@ def variable_summaries(var, name):
     name -- variable name
     """
     mean = tf.reduce_mean(var)
-    tf.scalar_summary('mean/'+name, mean)
+    tf.scalar_summary(name+'/mean', mean)
     stddev = tf.reduce_mean(tf.reduce_sum(tf.square(var-mean)))
-    tf.scalar_summary('stddev/'+name, stddev)
+    tf.scalar_summary(name+'/stddev', stddev)
     _min = tf.reduce_min(var)
-    tf.scalar_summary('min/'+name, _min)
+    #tf.scalar_summary(name+'/min', _min)
     _max = tf.reduce_max(var)
-    tf.scalar_summary('max/'+name, _max)
+    #tf.scalar_summary(name+'/max', _max)
     tf.histogram_summary(name, var)
 
 def nn_layer(input_tensor, input_dim, output_dim, layer_name, act = tf.sigmoid):
