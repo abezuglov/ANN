@@ -60,23 +60,21 @@ def nn_layer(input_tensor, input_dim, output_dim, layer_name, act = tf.sigmoid):
     layer_name -- name of the layer for summaries (statistics)
     act -- nonlinear activation function
     """
-    with tf.name_scope(layer_name):
-        with tf.name_scope('weights'):
-            weights = weight_variable(layer_name+'/weights',[input_dim, output_dim])
-            variable_summaries(weights, layer_name+'/weights')
-        with tf.name_scope('biases'):
-            biases = bias_variable(layer_name+'/biases',[output_dim])
-            variable_summaries(biases, layer_name+'/biases')
-        with tf.name_scope('WX_plus_b'):
-            preactivate = tf.matmul(input_tensor, weights)+biases
-            tf.histogram_summary(layer_name+'/pre_activations', preactivate)
+    with tf.variable_scope(layer_name):
+        weights = weight_variable('weights',[input_dim, output_dim])
+        #variable_summaries(weights, layer_name+'/weights')
+
+        biases = bias_variable('biases',[output_dim])
+        #variable_summaries(biases, layer_name+'/biases')
+
+        preactivate = tf.matmul(input_tensor, weights)+biases
+        #tf.histogram_summary(layer_name+'/pre_activations', preactivate)
         if act is not None:
             activations = act(preactivate, 'activation')
         else:
             activations = preactivate
-        tf.histogram_summary(layer_name+'/activations', activations)
+        #tf.histogram_summary(layer_name+'/activations', activations)
     return activations
-
 
 def inference(inputs):
     """
@@ -99,6 +97,10 @@ def loss(nn_outputs, true_outputs):
     """
     prediction_diff = nn_outputs-true_outputs
     MSE = tf.cast(tf.reduce_mean(tf.reduce_mean(tf.square(prediction_diff))),tf.float32)
+    
+    # Save MSE to the collection 
+    tf.add_to_collection('MSE',MSE)
+
     return MSE
     
 def training(MSE, learning_rate):
