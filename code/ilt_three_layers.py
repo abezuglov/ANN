@@ -9,7 +9,7 @@ import datetime as dt
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_integer('hidden1', 15, 'Size of the first hidden layer')
+flags.DEFINE_integer('hidden1', 25, 'Size of the first hidden layer')
 flags.DEFINE_integer('hidden2', 8, 'Size of the second hidden layer')
 flags.DEFINE_integer('hidden3', 3, 'Size of the third hidden layer')
 flags.DEFINE_integer('output_vars', 2, 'Size of the output layer')
@@ -96,10 +96,10 @@ def loss(nn_outputs, true_outputs):
     MSE -- Mean Squared Error (MSE), i.e. the losses tensor
     """
     prediction_diff = nn_outputs-true_outputs
-    MSE = tf.cast(tf.reduce_mean(tf.reduce_mean(tf.square(prediction_diff))),tf.float32)
+    MSE = tf.cast(tf.reduce_mean(tf.reduce_mean(tf.square(-prediction_diff))),tf.float32)
     
     # Save MSE to the collection 
-    tf.add_to_collection('MSE',MSE)
+    tf.add_to_collection('losses',MSE)
 
     return MSE
     
