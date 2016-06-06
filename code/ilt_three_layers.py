@@ -51,7 +51,7 @@ def variable_summaries(var, name):
     #tf.scalar_summary(name+'/max', _max)
     tf.histogram_summary(name, var)
 
-def nn_layer(input_tensor, input_dim, output_dim, layer_name, act = tf.sigmoid):
+def nn_layer(input_tensor, input_dim, output_dim, layer_name, act = tf.tanh):
     """
     Creates and returns NN layer
     input_tensor -- TF tensor at layer input

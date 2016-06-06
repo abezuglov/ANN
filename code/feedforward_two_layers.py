@@ -18,12 +18,12 @@ import datetime as dt
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_float('learning_rate', 0.1, 'Initial learning rate')
+flags.DEFINE_float('learning_rate', 0.05, 'Initial learning rate')
 flags.DEFINE_float('learning_rate_decay', 0.1, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
 
 flags.DEFINE_integer('max_steps', 1000, 'Number of steps to run trainer')
 flags.DEFINE_float('max_loss', 0.01, 'Maximally acceptable validation MSE')
-flags.DEFINE_integer('batch_size', 50*193, 'Batch size. Divides evenly into the dataset size of 193')
+flags.DEFINE_integer('batch_size', 64*193, 'Batch size. Divides evenly into the dataset size of 193')
 flags.DEFINE_integer('hidden1', 35, 'Size of the first hidden layer')
 flags.DEFINE_integer('hidden2', 10, 'Size of the second hidden layer')
 flags.DEFINE_integer('output_vars', 2, 'Size of the output layer')
@@ -84,7 +84,7 @@ def variable_summaries(var, name):
     #tf.scalar_summary(name+'/max', _max)
     tf.histogram_summary(name, var)
 
-def nn_layer(input_tensor, input_dim, output_dim, layer_name, act = tf.sigmoid):
+def nn_layer(input_tensor, input_dim, output_dim, layer_name, act = tf.tanh):
     """
     Creates and returns NN layer
     input_tensor -- TF tensor at layer input
@@ -175,6 +175,7 @@ def run_training():
         #print("correlation coefficients: ")
         #print(np.corrcoef(predicted_vs_actual[:,0],predicted_vs_actual[:,2]))
         #print(np.corrcoef(predicted_vs_actual[:,1],predicted_vs_actual[:,3]))
+        sess.close()
 
 
 def main(argv):
