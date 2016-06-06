@@ -1,5 +1,4 @@
 from __future__ import print_function
-#import matplotlib.pyplot as plt
 import numpy as np
 import os
 import sys
@@ -15,13 +14,13 @@ FLAGS = flags.FLAGS
 # Learning rate is important for model training. 
 # Decrease learning rate for more complicated models.
 # Increase if convergence is slow but steady
-flags.DEFINE_float('learning_rate', 0.1, 'Initial learning rate')
+flags.DEFINE_float('learning_rate', 0.3, 'Initial learning rate')
 flags.DEFINE_float('learning_rate_decay', 0.1, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
-flags.DEFINE_integer('max_steps', 2000, 'Number of steps to run trainer')
+flags.DEFINE_integer('max_steps', 5000, 'Number of steps to run trainer')
 flags.DEFINE_float('max_loss', 0.1, 'Max acceptable validation MSE')
 
-
 flags.DEFINE_integer('num_gpus',2,'Number of GPUs in the system')
+flags.DEFINE_string('tower_name','ivy','Tower names')
 
 # Split the training data into batches. Each hurricane is 193 records. Batch sizes are usually 2^k
 # When batch size equals to 0, or greater than the available data, use the complete dataset
@@ -67,66 +66,129 @@ def fill_feed_dict(data_set, inputs_pl, outputs_pl, train):
     }
     return feed_dict
 
-def tower_loss(scope):
-    #???
-    print(scope)
-
-def run_training():
+def tower_loss(x, y_, scope):
     """
-    Run training with parameters and graph from ilt_three_layers
+    Calculate the total loss on a single tower
+    scope -- unique prefix identifying the tower
     """
-    train_dataset, valid_dataset, test_dataset = ld.read_data_sets()
+    print("build graph for scope %s"%scope)
+    outputs = ilt_three_layers.inference(x)
+    _ = ilt_three_layers.loss(outputs, y_)
+    
+    losses = tf.get_collection('losses', scope)
+    total_loss = tf.add_n(losses, name='total_loss')
 
-    with tf.Graph().as_default():
-        x, y_ = placeholder_inputs()
+    #loss_avg = tf.train.ExponentialMovingAverage(0.9, name='avg')
+    #loss_avg_op = loss_avg.apply(losses+[total_loss])
 
-        MSE = ilt_three_layers.loss(ilt_three_layers.inference(x), y_)
-        tf.scalar_summary('MSE', MSE)
+    #with tf.control_dependencies([loss_avg_op]):
+    #    total_loss = tf.identity(total_loss)
+
+    return total_loss
+
+def average_gradients(tower_grads):
+    """
+    Calculate the average gradient for each shared variable across all towers
+    """
+    average_grads = []
+    for grad_and_vars in zip(*tower_grads):
+        grads = []
+        for g, _ in grad_and_vars:
+            expanded_g = tf.expand_dims(g,0)
+            grads.append(expanded_g)
+        grad = tf.concat(0,grads)
+        grad = tf.reduce_mean(grad,0)
         
-        apply_gradient_op = ilt_three_layers.training(MSE, FLAGS.learning_rate)
+        v = grad_and_vars[0][1]
+        grad_and_var = (grad, v)
+        average_grads.append(grad_and_var)
+    return average_grads
+
+def train():
+    """
+    Finish building the graph and run training on multiple (if available) GPU's
+    """
+    with tf.Graph().as_default(), tf.device('/cpu:0'):
+        x, y_ = placeholder_inputs()
+        global_step = tf.get_variable(
+            'global_step', [], 
+            initializer=tf.constant_initializer(0), trainable=False)
+        learning_rate = tf.train.exponential_decay(
+            FLAGS.learning_rate, global_step, FLAGS.max_steps,
+            FLAGS.learning_rate_decay, staircase=True)        
+
+        optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+        tower_grads = []
+        for i in xrange(FLAGS.num_gpus):
+            with tf.device('/gpu:%d'%i):
+                with tf.name_scope('%s_%d' % (FLAGS.tower_name, i)) as scope:
+                    loss = tower_loss(x, y_, scope)
+                   
+                    tf.get_variable_scope().reuse_variables()
+
+                    summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
+                    grads = optimizer.compute_gradients(loss)
+                    tower_grads.append(grads)
+
+        grads = average_gradients(tower_grads)
+
+        for grad, var in grads:
+            if grad is not None:
+                summaries.append(tf.histogram_summary(var.op.name+'/gradients', grad))
+
+        apply_gradient_op = optimizer.apply_gradients(grads, global_step = global_step)
+
+        for var in tf.trainable_variables():
+            summaries.append(tf.histogram_summary(var.op.name, var))
+
+        #variable_averages = tf.train.ExponentialMovingAverage(
+        #    0.1, global_step)
+        #variables_averages_op = variable_averages.apply(tf.trainable_variables())
+        #train_op = tf.group(apply_gradient_op, variables_averages_op)
+        train_op = apply_gradient_op
 
         merged = tf.merge_all_summaries()
+           
         init = tf.initialize_all_variables()
-        saver = tf.train.Saver()
         sess = tf.Session(config = tf.ConfigProto(
             allow_soft_placement = True, # allows to utilize GPU's & CPU's
             log_device_placement = False)) # shows GPU/CPU allocation
-
         # Prepare folders for saving models and its stats
         date_time_stamp = dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         train_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/train/'+date_time_stamp, sess.graph)
         test_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/validation/'+date_time_stamp, sess.graph)
-
         sess.run(init)
-        
-        #for step in xrange(FLAGS.max_steps):
+
+        tf.train.start_queue_runners(sess=sess)
+
+        train_dataset, valid_dataset, test_dataset = ld.read_data_sets()
+
         valid_loss = 1.0
         train_loss = 1.0
-        step = 0
+        step = 1
         while valid_loss > FLAGS.max_loss and step < FLAGS.max_steps:
             start_time = time.time()
             if step%100 != 0:
                 # regular training
                 feed_dict = fill_feed_dict(train_dataset, x, y_, train = True)
-                _, train_loss, summary = sess.run([apply_gradient_op, MSE, merged], feed_dict=feed_dict)
+                
+                _, train_loss, summary, lr = sess.run([train_op, loss, merged, learning_rate], feed_dict=feed_dict)
+                duration = time.time()-start_time
                 train_writer.add_summary(summary,step)
             else:
                 # check model fit
                 feed_dict = fill_feed_dict(valid_dataset, x, y_, train = False)
-                valid_loss, summary = sess.run([MSE, merged], feed_dict = feed_dict)
+                valid_loss, summary = sess.run([loss, merged], feed_dict = feed_dict)
                 test_writer.add_summary(summary,step)
                 duration = time.time()-start_time
-                print('Step %d (%d op/sec): Training MSE: %.5f, Validation MSE: %.5f' % (step, 1/duration, train_loss, valid_loss))
+                print('Step %d (%.2f millisec/op): Training MSE: %.5f, Validation MSE: %.5f' % (
+                    step, duration*1000.0, np.float32(train_loss).item(), np.float32(valid_loss).item()))
             step+=1
             
         feed_dict = fill_feed_dict(test_dataset, x, y_, train = False)
-        test_loss, summary = sess.run([MSE, merged], feed_dict = feed_dict)
-        print('Test MSE: %.5f' % (test_loss))
-        
-        #predicted_vs_actual = np.hstack((test_prediction.eval(session = sess), test_dataset.outputs))
-        #print("correlation coefficients: ")
-        #print(np.corrcoef(predicted_vs_actual[:,0],predicted_vs_actual[:,2]))
-        #print(np.corrcoef(predicted_vs_actual[:,1],predicted_vs_actual[:,3]))
+        test_loss = sess.run([loss], feed_dict = feed_dict)
+        print('Test MSE: %.5f' % (np.float32(test_loss).item()))
+        sess.close()
     
 def main(argv):
     if tf.gfile.Exists(FLAGS.summaries_dir):
@@ -135,7 +197,8 @@ def main(argv):
     if tf.gfile.Exists(FLAGS.checkpoints_dir):
         tf.gfile.DeleteRecursively(FLAGS.checkpoints_dir)
     tf.gfile.MakeDirs(FLAGS.checkpoints_dir)
-    run_training()
+    #run_training()
+    train()
 
 if __name__ == "__main__":
     main(sys.argv)

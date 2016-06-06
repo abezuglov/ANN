@@ -9,7 +9,7 @@ import datetime as dt
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_integer('hidden1', 15, 'Size of the first hidden layer')
+flags.DEFINE_integer('hidden1', 25, 'Size of the first hidden layer')
 flags.DEFINE_integer('hidden2', 8, 'Size of the second hidden layer')
 flags.DEFINE_integer('hidden3', 3, 'Size of the third hidden layer')
 flags.DEFINE_integer('output_vars', 2, 'Size of the output layer')
@@ -60,23 +60,21 @@ def nn_layer(input_tensor, input_dim, output_dim, layer_name, act = tf.tanh):
     layer_name -- name of the layer for summaries (statistics)
     act -- nonlinear activation function
     """
-    with tf.name_scope(layer_name):
-        with tf.name_scope('weights'):
-            weights = weight_variable(layer_name+'/weights',[input_dim, output_dim])
-            variable_summaries(weights, layer_name+'/weights')
-        with tf.name_scope('biases'):
-            biases = bias_variable(layer_name+'/biases',[output_dim])
-            variable_summaries(biases, layer_name+'/biases')
-        with tf.name_scope('WX_plus_b'):
-            preactivate = tf.matmul(input_tensor, weights)+biases
-            tf.histogram_summary(layer_name+'/pre_activations', preactivate)
+    with tf.variable_scope(layer_name):
+        weights = weight_variable('weights',[input_dim, output_dim])
+        #variable_summaries(weights, layer_name+'/weights')
+
+        biases = bias_variable('biases',[output_dim])
+        #variable_summaries(biases, layer_name+'/biases')
+
+        preactivate = tf.matmul(input_tensor, weights)+biases
+        #tf.histogram_summary(layer_name+'/pre_activations', preactivate)
         if act is not None:
             activations = act(preactivate, 'activation')
         else:
             activations = preactivate
-        tf.histogram_summary(layer_name+'/activations', activations)
+        #tf.histogram_summary(layer_name+'/activations', activations)
     return activations
-
 
 def inference(inputs):
     """
@@ -98,7 +96,11 @@ def loss(nn_outputs, true_outputs):
     MSE -- Mean Squared Error (MSE), i.e. the losses tensor
     """
     prediction_diff = nn_outputs-true_outputs
-    MSE = tf.cast(tf.reduce_mean(tf.reduce_mean(tf.square(prediction_diff))),tf.float32)
+    MSE = tf.cast(tf.reduce_mean(tf.reduce_mean(tf.square(-prediction_diff))),tf.float32)
+    
+    # Save MSE to the collection 
+    tf.add_to_collection('losses',MSE)
+
     return MSE
     
 def training(MSE, learning_rate):
@@ -113,8 +115,6 @@ def training(MSE, learning_rate):
 
     # calculate gradients
     gradients = optimizer.compute_gradients(MSE)
-    print("Gradients:")
-    print(gradients)
 
     # create/reuse a variable on CPU to keep track of number of iterations at training
     #with tf.device('/cpu:0'):
