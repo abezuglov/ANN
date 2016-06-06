@@ -1,5 +1,4 @@
 from __future__ import print_function
-#import matplotlib.pyplot as plt
 import numpy as np
 import os
 import sys
@@ -15,11 +14,10 @@ FLAGS = flags.FLAGS
 # Learning rate is important for model training. 
 # Decrease learning rate for more complicated models.
 # Increase if convergence is slow but steady
-flags.DEFINE_float('learning_rate', 0.1, 'Initial learning rate')
-flags.DEFINE_float('learning_rate_decay', 0.9, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
-flags.DEFINE_integer('max_steps', 50, 'Number of steps to run trainer')
+flags.DEFINE_float('learning_rate', 0.3, 'Initial learning rate')
+flags.DEFINE_float('learning_rate_decay', 0.1, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
+flags.DEFINE_integer('max_steps', 5000, 'Number of steps to run trainer')
 flags.DEFINE_float('max_loss', 0.1, 'Max acceptable validation MSE')
-
 
 flags.DEFINE_integer('num_gpus',2,'Number of GPUs in the system')
 flags.DEFINE_string('tower_name','ivy','Tower names')
@@ -27,7 +25,7 @@ flags.DEFINE_string('tower_name','ivy','Tower names')
 # Split the training data into batches. Each hurricane is 193 records. Batch sizes are usually 2^k
 # When batch size equals to 0, or greater than the available data, use the complete dataset
 # Large batch sizes produce more accurate update gradients, but the training is slower
-flags.DEFINE_integer('batch_size', 32*193, 'Batch size. Divides evenly into the dataset size of 193')
+flags.DEFINE_integer('batch_size', 64*193, 'Batch size. Divides evenly into the dataset size of 193')
 
 # Not currently used. The data is loaded in load_datasets (ld) and put in Dataset objects:
 # train_dataset, valid_dataset, and test_dataset
@@ -80,11 +78,11 @@ def tower_loss(x, y_, scope):
     losses = tf.get_collection('losses', scope)
     total_loss = tf.add_n(losses, name='total_loss')
 
-    loss_avg = tf.train.ExponentialMovingAverage(0.9, name='avg')
-    loss_avg_op = loss_avg.apply(losses+[total_loss])
+    #loss_avg = tf.train.ExponentialMovingAverage(0.9, name='avg')
+    #loss_avg_op = loss_avg.apply(losses+[total_loss])
 
-    with tf.control_dependencies([loss_avg_op]):
-        total_loss = tf.identity(total_loss)
+    #with tf.control_dependencies([loss_avg_op]):
+    #    total_loss = tf.identity(total_loss)
 
     return total_loss
 
@@ -107,6 +105,9 @@ def average_gradients(tower_grads):
     return average_grads
 
 def train():
+    """
+    Finish building the graph and run training on multiple (if available) GPU's
+    """
     with tf.Graph().as_default(), tf.device('/cpu:0'):
         x, y_ = placeholder_inputs()
         global_step = tf.get_variable(
@@ -127,12 +128,9 @@ def train():
 
                     summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
                     grads = optimizer.compute_gradients(loss)
-                    #last_grad = grads[0][0]
                     tower_grads.append(grads)
 
         grads = average_gradients(tower_grads)
-        ivy_0_loss = tf.get_collection('losses','ivy_0')[0]
-        ivy_1_loss = tf.get_collection('losses','ivy_1')[0]
 
         for grad, var in grads:
             if grad is not None:
@@ -142,7 +140,6 @@ def train():
 
         for var in tf.trainable_variables():
             summaries.append(tf.histogram_summary(var.op.name, var))
-            #last_var = var
 
         #variable_averages = tf.train.ExponentialMovingAverage(
         #    0.1, global_step)
@@ -168,92 +165,30 @@ def train():
 
         valid_loss = 1.0
         train_loss = 1.0
-        step = 0
-        while valid_loss > FLAGS.max_loss and step < FLAGS.max_steps:
-            start_time = time.time()
-            if step%10 != 0:
-                # regular training
-                feed_dict = fill_feed_dict(train_dataset, x, y_, train = True)
-                
-                _, train_loss, summary, i1, i2 = sess.run([train_op, loss, merged, ivy_0_loss, ivy_1_loss], feed_dict=feed_dict)
-                #_, train_loss = sess.run([apply_gradient_op, loss], feed_dict=feed_dict)
-                print('Step %d (%d op/sec): Training MSE: %.5f' % (step, 1/duration, np.float32(train_loss).item()))
-                print("ivy 0 loss %.7f" % np.float32(i1).item())
-                print("ivy 1 loss %.7f" % np.float32(i2).item())
-                train_writer.add_summary(summary,step)
-            else:
-                # check model fit
-                feed_dict = fill_feed_dict(valid_dataset, x, y_, train = False)
-                _, valid_loss, summary = sess.run([train_op, loss, merged], feed_dict = feed_dict)
-                #valid_loss = sess.run([loss], feed_dict = feed_dict)
-                test_writer.add_summary(summary,step)
-                duration = time.time()-start_time
-                print('Step %d (%d op/sec): Training MSE: %.8f, Validation MSE: %.8f' % (
-                    step, 1/duration, np.float32(train_loss).item(), np.float32(valid_loss).item()))
-                #print('Step %d (%d op/sec): Training MSE: %.5f, Validation MSE: %.5f' % (step, 1/duration, 0,0))
-            step+=1
-            
-        feed_dict = fill_feed_dict(test_dataset, x, y_, train = False)
-        test_loss = sess.run([loss], feed_dict = feed_dict)
-        print('Test MSE: %.5f' % (np.float32(test_loss).item()))
-
-def run_training():
-    """
-    Run training with parameters and graph from ilt_three_layers
-    """
-    train_dataset, valid_dataset, test_dataset = ld.read_data_sets()
-
-    with tf.Graph().as_default():
-        x, y_ = placeholder_inputs()
-
-        MSE = ilt_three_layers.loss(ilt_three_layers.inference(x), y_)
-        tf.scalar_summary('MSE', MSE)
-        
-        apply_gradient_op = ilt_three_layers.training(MSE, FLAGS.learning_rate)
-
-        merged = tf.merge_all_summaries()
-        init = tf.initialize_all_variables()
-        saver = tf.train.Saver()
-        sess = tf.Session(config = tf.ConfigProto(
-            allow_soft_placement = True, # allows to utilize GPU's & CPU's
-            log_device_placement = False)) # shows GPU/CPU allocation
-
-        # Prepare folders for saving models and its stats
-        date_time_stamp = dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        train_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/train/'+date_time_stamp, sess.graph)
-        test_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/validation/'+date_time_stamp, sess.graph)
-
-        sess.run(init)
-        
-        #for step in xrange(FLAGS.max_steps):
-        valid_loss = 1.0
-        train_loss = 1.0
-        step = 0
+        step = 1
         while valid_loss > FLAGS.max_loss and step < FLAGS.max_steps:
             start_time = time.time()
             if step%100 != 0:
                 # regular training
                 feed_dict = fill_feed_dict(train_dataset, x, y_, train = True)
-                _, train_loss, summary = sess.run([apply_gradient_op, MSE, merged], feed_dict=feed_dict)
+                
+                _, train_loss, summary, lr = sess.run([train_op, loss, merged, learning_rate], feed_dict=feed_dict)
+                duration = time.time()-start_time
                 train_writer.add_summary(summary,step)
             else:
                 # check model fit
                 feed_dict = fill_feed_dict(valid_dataset, x, y_, train = False)
-                valid_loss, summary = sess.run([MSE, merged], feed_dict = feed_dict)
+                valid_loss, summary = sess.run([loss, merged], feed_dict = feed_dict)
                 test_writer.add_summary(summary,step)
                 duration = time.time()-start_time
-
-                print('Step %d (%d op/sec): Training MSE: %.5f, Validation MSE: %.5f' % (step, 1/duration, train_loss, valid_loss))
+                print('Step %d (%.2f millisec/op): Training MSE: %.5f, Validation MSE: %.5f' % (
+                    step, duration*1000.0, np.float32(train_loss).item(), np.float32(valid_loss).item()))
             step+=1
             
         feed_dict = fill_feed_dict(test_dataset, x, y_, train = False)
-        test_loss, summary = sess.run([MSE, merged], feed_dict = feed_dict)
-        print('Test MSE: %.5f' % (test_loss))
-        
-        #predicted_vs_actual = np.hstack((test_prediction.eval(session = sess), test_dataset.outputs))
-        #print("correlation coefficients: ")
-        #print(np.corrcoef(predicted_vs_actual[:,0],predicted_vs_actual[:,2]))
-        #print(np.corrcoef(predicted_vs_actual[:,1],predicted_vs_actual[:,3]))
+        test_loss = sess.run([loss], feed_dict = feed_dict)
+        print('Test MSE: %.5f' % (np.float32(test_loss).item()))
+        sess.close()
     
 def main(argv):
     if tf.gfile.Exists(FLAGS.summaries_dir):

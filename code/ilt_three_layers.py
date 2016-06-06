@@ -51,7 +51,7 @@ def variable_summaries(var, name):
     #tf.scalar_summary(name+'/max', _max)
     tf.histogram_summary(name, var)
 
-def nn_layer(input_tensor, input_dim, output_dim, layer_name, act = tf.sigmoid):
+def nn_layer(input_tensor, input_dim, output_dim, layer_name, act = tf.tanh):
     """
     Creates and returns NN layer
     input_tensor -- TF tensor at layer input
@@ -115,8 +115,6 @@ def training(MSE, learning_rate):
 
     # calculate gradients
     gradients = optimizer.compute_gradients(MSE)
-    print("Gradients:")
-    print(gradients)
 
     # create/reuse a variable on CPU to keep track of number of iterations at training
     #with tf.device('/cpu:0'):
