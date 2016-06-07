@@ -179,7 +179,7 @@ def read_data_sets(url_from = 'http://mrtee.europa.renci.org/~bblanton/ANN/',
     del(valid_output)
     del(test_dataset2)
     del(test_output)
-    print("Num examples in train %d" % train.num_examples)
+    print("Num examples in train %d, validation %d, test %d" % (train.num_examples, valid.num_examples, test.num_examples))
     return train, valid, test
 
 

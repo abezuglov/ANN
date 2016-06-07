@@ -31,11 +31,14 @@ flags.DEFINE_integer('batch_size', 64*193, 'Batch size. Divides evenly into the 
 # train_dataset, valid_dataset, and test_dataset
 #flags.DEFINE_string('train_dir', './data/', 'Directory to put the training data')
 
-# Save models in this directory. TODO: save/load models
+# Save models in this directory
 flags.DEFINE_string('checkpoints_dir', './checkpoints', 'Directory to store checkpoints')
 
 # Statistics
 flags.DEFINE_string('summaries_dir','./logs','Summaries directory')
+
+# Output data
+flags.DEFINE_string('output','./model','When model evaluation, output the data here')
 
 def placeholder_inputs():
     """
@@ -186,9 +189,12 @@ def run():
         # Assign datasets 
         train_dataset, valid_dataset, test_dataset = ld.read_data_sets()
         feed_dict = fill_feed_dict(train_dataset, x, y_, train = False)
-        test_loss = sess.run([loss], feed_dict = feed_dict)
+        test_loss, out = sess.run([loss, outputs], feed_dict = feed_dict)
         duration = time.time()-start_time
         print('Elapsed time: %.2f sec. Test MSE: %.5f' % (duration, np.float32(test_loss).item()))
+        print(out.shape)
+        np.save(FLAGS.output,out)
+        print('Outputs saved as %s'%FLAGS.output)
         sess.close()
 
     
@@ -202,6 +208,8 @@ def main(argv):
         tf.gfile.MakeDirs(FLAGS.checkpoints_dir)
         train()
     else:
+        if tf.gfile.Exists(FLAGS.output+'*'):
+            tf.gfile.DeleteRecursively(FLAGS.output+'*')
         run()
     
 if __name__ == "__main__":
