@@ -11,12 +11,14 @@ import ilt_three_layers
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
+flags.DEFINE_boolean('train', False, 'When True, run training & save model. When False, load a previously saved model and evaluate it')
+
 # Learning rate is important for model training. 
 # Decrease learning rate for more complicated models.
 # Increase if convergence is slow but steady
 flags.DEFINE_float('learning_rate', 0.05, 'Initial learning rate')
 flags.DEFINE_float('learning_rate_decay', 0.1, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
-flags.DEFINE_integer('max_steps', 2000, 'Number of steps to run trainer')
+flags.DEFINE_integer('max_steps', 200, 'Number of steps to run trainer')
 flags.DEFINE_float('max_loss', 0.1, 'Max acceptable validation MSE')
 flags.DEFINE_float('moving_avg_decay', 0.999, 'Moving average decay for training variables')
 
@@ -37,6 +39,9 @@ flags.DEFINE_string('checkpoints_dir', './checkpoints', 'Directory to store chec
 
 # Statistics
 flags.DEFINE_string('summaries_dir','./logs','Summaries directory')
+
+# Output data
+flags.DEFINE_string('output','./model','When model evaluation, output the data here')
 
 def placeholder_inputs():
     """
@@ -224,16 +229,61 @@ def train():
         test_loss = sess.run([loss], feed_dict = feed_dict)
         print('Test MSE: %.5f' % (np.float32(test_loss).item()))
         sess.close()
-    
+
+def run():
+    """
+    Finish building the graph and run it on a single CPU's
+    """
+    with tf.Graph().as_default(), tf.device('/cpu:0'):
+        x, y_ = placeholder_inputs()
+        outputs = ilt_three_layers.inference(x)
+        loss = ilt_three_layers.loss(outputs, y_)
+
+        init = tf.initialize_all_variables()
+        sess = tf.Session(config = tf.ConfigProto(
+            allow_soft_placement = False, # allows to utilize GPU's & CPU's
+            log_device_placement = False)) # shows GPU/CPU allocation
+         
+        start_time = time.time()
+        # Below is the code for running graph
+        sess.run(init)
+
+        saver = tf.train.Saver()
+        ckpt = tf.train.get_checkpoint_state(FLAGS.checkpoints_dir)
+        if ckpt.model_checkpoint_path:
+            saver.restore(sess, ckpt.model_checkpoint_path)
+            print("Model %s restored"%ckpt.model_checkpoint_path)
+        else:
+            print("Could not find any checkpoints at %s"%FLAGS.checkpoints_dir)
+            return
+
+        tf.train.start_queue_runners(sess=sess)
+
+        # Assign datasets 
+        train_dataset, valid_dataset, test_dataset = ld.read_data_sets()
+        feed_dict = fill_feed_dict(train_dataset, x, y_, train = False)
+        test_loss, out = sess.run([loss, outputs], feed_dict = feed_dict)
+        duration = time.time()-start_time
+        print('Elapsed time: %.2f sec. Test MSE: %.5f' % (duration, np.float32(test_loss).item()))
+        print(out.shape)
+        np.save(FLAGS.output,out)
+        print('Outputs saved as %s'%FLAGS.output)
+        sess.close()
+
+
 def main(argv):
-    if tf.gfile.Exists(FLAGS.summaries_dir):
-        tf.gfile.DeleteRecursively(FLAGS.summaries_dir)
-    tf.gfile.MakeDirs(FLAGS.summaries_dir)
-    if tf.gfile.Exists(FLAGS.checkpoints_dir):
-        tf.gfile.DeleteRecursively(FLAGS.checkpoints_dir)
-    tf.gfile.MakeDirs(FLAGS.checkpoints_dir)
-    #run_training()
-    train()
+    if(FLAGS.train):
+        if tf.gfile.Exists(FLAGS.summaries_dir):
+            tf.gfile.DeleteRecursively(FLAGS.summaries_dir)
+        tf.gfile.MakeDirs(FLAGS.summaries_dir)
+        if tf.gfile.Exists(FLAGS.checkpoints_dir):
+            tf.gfile.DeleteRecursively(FLAGS.checkpoints_dir)
+        tf.gfile.MakeDirs(FLAGS.checkpoints_dir)
+        train()
+    else:
+        if tf.gfile.Exists(FLAGS.output+'*'):
+            tf.gfile.DeleteRecursively(FLAGS.output+'*')
+        run()
 
 if __name__ == "__main__":
     main(sys.argv)
