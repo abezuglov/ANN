@@ -184,6 +184,7 @@ def train():
         date_time_stamp = dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         train_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/train/'+date_time_stamp, sess.graph)
         test_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/validation/'+date_time_stamp, sess.graph)
+        saver = tf.train.Saver(tf.all_variables())
 
         # Below is the code for running graph
         sess.run(init)
@@ -214,6 +215,9 @@ def train():
                 duration = time.time()-start_time
                 print('Step %d (%.2f op/sec): Training MSE: %.5f, Validation MSE: %.5f' % (
                     step, 1.0/duration, np.float32(train_loss).item(), np.float32(valid_loss).item()))
+            if step%1000 != 0:
+                checkpoint_path = os.path.join(FLAGS.checkpoints_dir,'model.ckpt')
+                saver.save(sess, checkpoint_path, global_step=step)
             step+=1
             
         feed_dict = fill_feed_dict(test_dataset, x, y_, train = False)
