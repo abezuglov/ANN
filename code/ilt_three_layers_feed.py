@@ -14,16 +14,17 @@ FLAGS = flags.FLAGS
 # Learning rate is important for model training. 
 # Decrease learning rate for more complicated models.
 # Increase if convergence is slow but steady
-flags.DEFINE_float('learning_rate', 0.3, 'Initial learning rate')
+flags.DEFINE_float('learning_rate', 0.05, 'Initial learning rate')
 flags.DEFINE_float('learning_rate_decay', 0.1, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
-flags.DEFINE_integer('max_steps', 5000, 'Number of steps to run trainer')
+flags.DEFINE_integer('max_steps', 2000, 'Number of steps to run trainer')
 flags.DEFINE_float('max_loss', 0.1, 'Max acceptable validation MSE')
+flags.DEFINE_float('moving_avg_decay', 0.999, 'Moving average decay for training variables')
 
 flags.DEFINE_integer('num_gpus',2,'Number of GPUs in the system')
 flags.DEFINE_string('tower_name','ivy','Tower names')
 
 # Split the training data into batches. Each hurricane is 193 records. Batch sizes are usually 2^k
-# When batch size equals to 0, or greater than the available data, use the complete dataset
+# When batch size equals to 0, or exceeds available data, use the whole dataset
 # Large batch sizes produce more accurate update gradients, but the training is slower
 flags.DEFINE_integer('batch_size', 64*193, 'Batch size. Divides evenly into the dataset size of 193')
 
@@ -52,14 +53,17 @@ def fill_feed_dict(data_set, inputs_pl, outputs_pl, train):
     data_set -- dataset
     inputs_pl -- TF placeholder for inputs
     outputs_pl -- TF placeholder for outputs
-    train -- if TRUE, then return DS in batches for training. Otherwise, return the complete DS for validation/testing
+    train -- if TRUE, then return DS in batches for training. Otherwise, return complete DS for validation/testing
     """
     if train:
         batch_size = FLAGS.batch_size
     else:
         batch_size = 0
 
+    # Read next batch of data from the dataset
     inputs, outputs = data_set.next_batch(batch_size = batch_size)
+
+    # Create dictionary for return
     feed_dict = {
         inputs_pl: inputs,
         outputs_pl: outputs
@@ -69,44 +73,57 @@ def fill_feed_dict(data_set, inputs_pl, outputs_pl, train):
 def tower_loss(x, y_, scope):
     """
     Calculate the total loss on a single tower
+    x, y_ -- inputs and expected outputs
     scope -- unique prefix identifying the tower
+    
+    Note: The graph is created on /cpu:0. The code below reuses the graph
     """
-    print("build graph for scope %s"%scope)
+    # Run inference and calculate the losses. The losses are stored in the collection
+    # so skip the returns
     outputs = ilt_three_layers.inference(x)
     _ = ilt_three_layers.loss(outputs, y_)
     
+    # Read the losses from the collection and sum them up
     losses = tf.get_collection('losses', scope)
     total_loss = tf.add_n(losses, name='total_loss')
 
-    #loss_avg = tf.train.ExponentialMovingAverage(0.9, name='avg')
-    #loss_avg_op = loss_avg.apply(losses+[total_loss])
+    loss_avg = tf.train.ExponentialMovingAverage(FLAGS.moving_avg_decay, name='avg')
+    loss_avg_op = loss_avg.apply(losses+[total_loss])
 
-    #with tf.control_dependencies([loss_avg_op]):
-    #    total_loss = tf.identity(total_loss)
+    with tf.control_dependencies([loss_avg_op]):
+        total_loss = tf.identity(total_loss)
 
     return total_loss
 
 def average_gradients(tower_grads):
     """
     Calculate the average gradient for each shared variable across all towers
+    tower_grads -- list of lists of tuples (gradient, variable)
     """
     average_grads = []
+
+    # zip(*tower_grads) puts grads for each variable together
+    # grad_and_vars is a tuple of tuples ((grad_gpu1, var1),(grad_gpu2, var1))
     for grad_and_vars in zip(*tower_grads):
         grads = []
+        # g each individual gradient
         for g, _ in grad_and_vars:
             expanded_g = tf.expand_dims(g,0)
             grads.append(expanded_g)
+        # grad average gradient across the gpu's
         grad = tf.concat(0,grads)
         grad = tf.reduce_mean(grad,0)
         
+        # get the variable as the second element from the first tuple
         v = grad_and_vars[0][1]
+        # combine the gradient and append it to the average_grads
         grad_and_var = (grad, v)
         average_grads.append(grad_and_var)
     return average_grads
 
 def train():
     """
-    Finish building the graph and run training on multiple (if available) GPU's
+    Finish building the graph and run training on multiple GPU's
     """
     with tf.Graph().as_default(), tf.device('/cpu:0'):
         x, y_ = placeholder_inputs()
@@ -115,37 +132,47 @@ def train():
             initializer=tf.constant_initializer(0), trainable=False)
         learning_rate = tf.train.exponential_decay(
             FLAGS.learning_rate, global_step, FLAGS.max_steps,
-            FLAGS.learning_rate_decay, staircase=True)        
+            FLAGS.learning_rate_decay, staircase=False)        
 
-        optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+        # create a standard gradient descent optimizer
+        #optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+        optimizer = tf.train.AdamOptimizer(learning_rate)
+
+        # tower_grads -- list of gradients (list of list of tuples like (grad1, var1))
         tower_grads = []
         for i in xrange(FLAGS.num_gpus):
-            with tf.device('/gpu:%d'%i):
+            with tf.device('/gpu:%d'%i): # make sure TF runs the code on the GPU:%d tower
                 with tf.name_scope('%s_%d' % (FLAGS.tower_name, i)) as scope:
+                    # Construct the entire ANN, but share the vars across the towers
                     loss = tower_loss(x, y_, scope)
                    
+                    # Make sure that the vars are reused for the next tower
                     tf.get_variable_scope().reuse_variables()
 
                     summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
+                    
+                    # calculate the gradients and add them to the list
                     grads = optimizer.compute_gradients(loss)
                     tower_grads.append(grads)
 
+        # calculate average gradients
         grads = average_gradients(tower_grads)
 
         for grad, var in grads:
             if grad is not None:
                 summaries.append(tf.histogram_summary(var.op.name+'/gradients', grad))
 
+        # apply the gradients to the model
         apply_gradient_op = optimizer.apply_gradients(grads, global_step = global_step)
 
         for var in tf.trainable_variables():
             summaries.append(tf.histogram_summary(var.op.name, var))
 
-        #variable_averages = tf.train.ExponentialMovingAverage(
-        #    0.1, global_step)
-        #variables_averages_op = variable_averages.apply(tf.trainable_variables())
-        #train_op = tf.group(apply_gradient_op, variables_averages_op)
-        train_op = apply_gradient_op
+        variable_averages = tf.train.ExponentialMovingAverage(
+            FLAGS.moving_avg_decay, global_step)
+        variables_averages_op = variable_averages.apply(tf.trainable_variables())
+        train_op = tf.group(apply_gradient_op, variables_averages_op)
+        #train_op = apply_gradient_op
 
         merged = tf.merge_all_summaries()
            
@@ -157,15 +184,19 @@ def train():
         date_time_stamp = dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         train_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/train/'+date_time_stamp, sess.graph)
         test_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/validation/'+date_time_stamp, sess.graph)
+
+        # Below is the code for running graph
         sess.run(init)
 
         tf.train.start_queue_runners(sess=sess)
 
+        # Assign datasets 
         train_dataset, valid_dataset, test_dataset = ld.read_data_sets()
 
         valid_loss = 1.0
         train_loss = 1.0
         step = 1
+        # Main training loop
         while valid_loss > FLAGS.max_loss and step < FLAGS.max_steps:
             start_time = time.time()
             if step%100 != 0:
@@ -181,8 +212,8 @@ def train():
                 valid_loss, summary = sess.run([loss, merged], feed_dict = feed_dict)
                 test_writer.add_summary(summary,step)
                 duration = time.time()-start_time
-                print('Step %d (%.2f millisec/op): Training MSE: %.5f, Validation MSE: %.5f' % (
-                    step, duration*1000.0, np.float32(train_loss).item(), np.float32(valid_loss).item()))
+                print('Step %d (%.2f op/sec): Training MSE: %.5f, Validation MSE: %.5f' % (
+                    step, 1.0/duration, np.float32(train_loss).item(), np.float32(valid_loss).item()))
             step+=1
             
         feed_dict = fill_feed_dict(test_dataset, x, y_, train = False)
