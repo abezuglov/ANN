@@ -38,7 +38,7 @@ flags.DEFINE_string('checkpoints_dir', './checkpoints', 'Directory to store chec
 flags.DEFINE_string('summaries_dir','./logs','Summaries directory')
 
 # Output data
-flags.DEFINE_string('output','./model','Save ANN outputs to this file')
+flags.DEFINE_string('output','./model.txt','Save ANN outputs to this file')
 
 def placeholder_inputs():
     """
@@ -190,7 +190,7 @@ def run():
         duration = time.time()-start_time
         print('Elapsed time: %.2f sec. Test MSE: %.5f' % (duration, np.float32(test_loss).item()))
         print(out.shape)
-        np.save(FLAGS.output,out)
+        np.savetxt(FLAGS.output,out)
         print('Outputs saved as %s'%FLAGS.output)
         sess.close()
     

@@ -11,7 +11,7 @@ import ilt_two_layers as ilt
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_boolean('train', True, 'When True, run training & save model. When False, load a previously saved model and evaluate it')
+flags.DEFINE_boolean('train', False, 'When True, run training & save model. When False, load a previously saved model and evaluate it')
 
 # Learning rate is important for model training. 
 # Decrease learning rate for more complicated models.
@@ -22,7 +22,7 @@ flags.DEFINE_integer('max_steps', 201, 'Number of steps to run trainer')
 flags.DEFINE_float('max_loss', 0.1, 'Max acceptable validation MSE')
 flags.DEFINE_float('moving_avg_decay', 0.999, 'Moving average decay for training variables')
 
-flags.DEFINE_integer('num_gpus',1,'Number of GPUs in the system')
+flags.DEFINE_integer('num_gpus',2,'Number of GPUs in the system')
 flags.DEFINE_string('tower_name','ivy','Tower names')
 
 # Split the training data into batches. Each hurricane is 193 records. Batch sizes are usually 2^k
@@ -41,7 +41,7 @@ flags.DEFINE_string('checkpoints_dir', './checkpoints', 'Directory to store chec
 flags.DEFINE_string('summaries_dir','./logs','Summaries directory')
 
 # Output data
-flags.DEFINE_string('output','./model','When model evaluation, output the data here')
+flags.DEFINE_string('output','./model.txt','When model evaluation, output the data here')
 
 def placeholder_inputs():
     """
@@ -266,7 +266,7 @@ def run():
         duration = time.time()-start_time
         print('Elapsed time: %.2f sec. Test MSE: %.5f' % (duration, np.float32(test_loss).item()))
         print(out.shape)
-        np.save(FLAGS.output,out)
+        np.savetxt(FLAGS.output,out)
         print('Outputs saved as %s'%FLAGS.output)
         sess.close()
 
