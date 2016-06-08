@@ -6,7 +6,7 @@ import time
 import tensorflow as tf
 import load_datasets as ld
 import datetime as dt
-import ilt_three_layers
+import ilt_two_layers as ilt
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -18,12 +18,9 @@ flags.DEFINE_boolean('train', False, 'When True, run training & save model. When
 # Increase if convergence is slow but steady
 flags.DEFINE_float('learning_rate', 0.05, 'Initial learning rate')
 flags.DEFINE_float('learning_rate_decay', 0.1, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
-flags.DEFINE_integer('max_steps', 200, 'Number of steps to run trainer')
+flags.DEFINE_integer('max_steps', 1001, 'Number of steps to run trainer')
 flags.DEFINE_float('max_loss', 0.1, 'Max acceptable validation MSE')
 flags.DEFINE_float('moving_avg_decay', 0.999, 'Moving average decay for training variables')
-
-flags.DEFINE_integer('num_gpus',2,'Number of GPUs in the system')
-flags.DEFINE_string('tower_name','ivy','Tower names')
 
 # Split the training data into batches. Each hurricane is 193 records. Batch sizes are usually 2^k
 # When batch size equals to 0, or exceeds available data, use the whole dataset
@@ -34,14 +31,14 @@ flags.DEFINE_integer('batch_size', 64*193, 'Batch size. Divides evenly into the 
 # train_dataset, valid_dataset, and test_dataset
 #flags.DEFINE_string('train_dir', './data/', 'Directory to put the training data')
 
-# Save models in this directory. TODO: save/load models
+# Save models in this directory
 flags.DEFINE_string('checkpoints_dir', './checkpoints', 'Directory to store checkpoints')
 
 # Statistics
 flags.DEFINE_string('summaries_dir','./logs','Summaries directory')
 
 # Output data
-flags.DEFINE_string('output','./model','When model evaluation, output the data here')
+flags.DEFINE_string('output','./model','Save ANN outputs to this file')
 
 def placeholder_inputs():
     """
@@ -75,60 +72,9 @@ def fill_feed_dict(data_set, inputs_pl, outputs_pl, train):
     }
     return feed_dict
 
-def tower_loss(x, y_, scope):
-    """
-    Calculate the total loss on a single tower
-    x, y_ -- inputs and expected outputs
-    scope -- unique prefix identifying the tower
-    
-    Note: The graph is created on /cpu:0. The code below reuses the graph
-    """
-    # Run inference and calculate the losses. The losses are stored in the collection
-    # so skip the returns
-    outputs = ilt_three_layers.inference(x)
-    _ = ilt_three_layers.loss(outputs, y_)
-    
-    # Read the losses from the collection and sum them up
-    losses = tf.get_collection('losses', scope)
-    total_loss = tf.add_n(losses, name='total_loss')
-
-    loss_avg = tf.train.ExponentialMovingAverage(FLAGS.moving_avg_decay, name='avg')
-    loss_avg_op = loss_avg.apply(losses+[total_loss])
-
-    with tf.control_dependencies([loss_avg_op]):
-        total_loss = tf.identity(total_loss)
-
-    return total_loss
-
-def average_gradients(tower_grads):
-    """
-    Calculate the average gradient for each shared variable across all towers
-    tower_grads -- list of lists of tuples (gradient, variable)
-    """
-    average_grads = []
-
-    # zip(*tower_grads) puts grads for each variable together
-    # grad_and_vars is a tuple of tuples ((grad_gpu1, var1),(grad_gpu2, var1))
-    for grad_and_vars in zip(*tower_grads):
-        grads = []
-        # g each individual gradient
-        for g, _ in grad_and_vars:
-            expanded_g = tf.expand_dims(g,0)
-            grads.append(expanded_g)
-        # grad average gradient across the gpu's
-        grad = tf.concat(0,grads)
-        grad = tf.reduce_mean(grad,0)
-        
-        # get the variable as the second element from the first tuple
-        v = grad_and_vars[0][1]
-        # combine the gradient and append it to the average_grads
-        grad_and_var = (grad, v)
-        average_grads.append(grad_and_var)
-    return average_grads
-
 def train():
     """
-    Finish building the graph and run training on multiple GPU's
+    Finish building the graph and run training on a single CPU's
     """
     with tf.Graph().as_default(), tf.device('/cpu:0'):
         x, y_ = placeholder_inputs()
@@ -142,36 +88,14 @@ def train():
         # create a standard gradient descent optimizer
         #optimizer = tf.train.GradientDescentOptimizer(learning_rate)
         optimizer = tf.train.AdamOptimizer(learning_rate)
+        outputs = ilt.inference(x)
+        loss = ilt.loss(outputs, y_)
+        tf.scalar_summary('MSE', loss)
 
-        # tower_grads -- list of gradients (list of list of tuples like (grad1, var1))
-        tower_grads = []
-        for i in xrange(FLAGS.num_gpus):
-            with tf.device('/gpu:%d'%i): # make sure TF runs the code on the GPU:%d tower
-                with tf.name_scope('%s_%d' % (FLAGS.tower_name, i)) as scope:
-                    # Construct the entire ANN, but share the vars across the towers
-                    loss = tower_loss(x, y_, scope)
-                   
-                    # Make sure that the vars are reused for the next tower
-                    tf.get_variable_scope().reuse_variables()
-
-                    summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
-                    
-                    # calculate the gradients and add them to the list
-                    grads = optimizer.compute_gradients(loss)
-                    tower_grads.append(grads)
-
-        # calculate average gradients
-        grads = average_gradients(tower_grads)
-
-        for grad, var in grads:
-            if grad is not None:
-                summaries.append(tf.histogram_summary(var.op.name+'/gradients', grad))
-
+        grads = optimizer.compute_gradients(loss)
+        
         # apply the gradients to the model
         apply_gradient_op = optimizer.apply_gradients(grads, global_step = global_step)
-
-        for var in tf.trainable_variables():
-            summaries.append(tf.histogram_summary(var.op.name, var))
 
         variable_averages = tf.train.ExponentialMovingAverage(
             FLAGS.moving_avg_decay, global_step)
@@ -183,13 +107,13 @@ def train():
            
         init = tf.initialize_all_variables()
         sess = tf.Session(config = tf.ConfigProto(
-            allow_soft_placement = True, # allows to utilize GPU's & CPU's
+            allow_soft_placement = False, # allows to utilize GPU's & CPU's
             log_device_placement = False)) # shows GPU/CPU allocation
         # Prepare folders for saving models and its stats
         date_time_stamp = dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         train_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/train/'+date_time_stamp, sess.graph)
         test_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/validation/'+date_time_stamp, sess.graph)
-        saver = tf.train.Saver(tf.all_variables())
+        saver = tf.train.Saver()
 
         # Below is the code for running graph
         sess.run(init)
@@ -220,11 +144,11 @@ def train():
                 duration = time.time()-start_time
                 print('Step %d (%.2f op/sec): Training MSE: %.5f, Validation MSE: %.5f' % (
                     step, 1.0/duration, np.float32(train_loss).item(), np.float32(valid_loss).item()))
-            if step%1000 != 0:
-                checkpoint_path = os.path.join(FLAGS.checkpoints_dir,'model.ckpt')
-                saver.save(sess, checkpoint_path, global_step=step)
             step+=1
-            
+
+        checkpoint_path = os.path.join(FLAGS.checkpoints_dir,'model.ckpt')
+        saver.save(sess, checkpoint_path, global_step=step)
+
         feed_dict = fill_feed_dict(test_dataset, x, y_, train = False)
         test_loss = sess.run([loss], feed_dict = feed_dict)
         print('Test MSE: %.5f' % (np.float32(test_loss).item()))
@@ -232,12 +156,12 @@ def train():
 
 def run():
     """
-    Finish building the graph and run it on a single CPU's
+    Finish building the graph and run it on the default device
     """
     with tf.Graph().as_default(), tf.device('/cpu:0'):
         x, y_ = placeholder_inputs()
-        outputs = ilt_three_layers.inference(x)
-        loss = ilt_three_layers.loss(outputs, y_)
+        outputs = ilt.inference(x)
+        loss = ilt.loss(outputs, y_)
 
         init = tf.initialize_all_variables()
         sess = tf.Session(config = tf.ConfigProto(
@@ -269,8 +193,7 @@ def run():
         np.save(FLAGS.output,out)
         print('Outputs saved as %s'%FLAGS.output)
         sess.close()
-
-
+    
 def main(argv):
     if(FLAGS.train):
         if tf.gfile.Exists(FLAGS.summaries_dir):
@@ -284,6 +207,6 @@ def main(argv):
         if tf.gfile.Exists(FLAGS.output+'*'):
             tf.gfile.DeleteRecursively(FLAGS.output+'*')
         run()
-
+    
 if __name__ == "__main__":
     main(sys.argv)
