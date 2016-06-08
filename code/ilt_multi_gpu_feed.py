@@ -11,14 +11,14 @@ import ilt_two_layers as ilt
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_boolean('train', False, 'When True, run training & save model. When False, load a previously saved model and evaluate it')
+flags.DEFINE_boolean('train', True, 'When True, run training & save model. When False, load a previously saved model and evaluate it')
 
 # Learning rate is important for model training. 
 # Decrease learning rate for more complicated models.
 # Increase if convergence is slow but steady
-flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate')
+flags.DEFINE_float('learning_rate', 0.05, 'Initial learning rate')
 flags.DEFINE_float('learning_rate_decay', 0.1, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
-flags.DEFINE_integer('max_steps', 201, 'Number of steps to run trainer')
+flags.DEFINE_integer('max_steps', 500, 'Number of steps to run trainer')
 flags.DEFINE_float('max_loss', 0.01, 'Max acceptable validation MSE')
 flags.DEFINE_float('moving_avg_decay', 0.999, 'Moving average decay for training variables')
 
@@ -119,7 +119,7 @@ def average_gradients(tower_grads):
 
 def train():
     """
-    Finish building the graph and run training on multiple GPU's
+    Build the graph and run training on multiple GPU's
     """
     # Assign datasets 
     train_dataset, valid_dataset, test_dataset = ld.read_data_sets()
@@ -161,24 +161,27 @@ def train():
                     # Make sure that the vars are reused for the next tower
                     tf.get_variable_scope().reuse_variables()
 
-                    summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
+                    #summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
                     
                     # calculate the gradients and add them to the list
                     grads = optimizer.compute_gradients(loss)
                     tower_grads.append(grads)
 
+        tf.scalar_summary('MSE',loss)
+
         # calculate average gradients
         grads = average_gradients(tower_grads)
 
-        for grad, var in grads:
-            if grad is not None:
-                summaries.append(tf.histogram_summary(var.op.name+'/gradients', grad))
+        #for grad, var in grads:
+        #    if grad is not None:
+        #        summaries.append(tf.histogram_summary(var.op.name+'/gradients', grad))
 
         # apply the gradients to the model
         apply_gradient_op = optimizer.apply_gradients(grads, global_step = global_step)
 
-        for var in tf.trainable_variables():
-            summaries.append(tf.histogram_summary(var.op.name, var))
+        # you wanna run the code slower?
+        #for var in tf.trainable_variables():
+        #    summaries.append(tf.histogram_summary(var.op.name, var))
 
         variable_averages = tf.train.ExponentialMovingAverage(
             FLAGS.moving_avg_decay, global_step)
@@ -223,10 +226,10 @@ def train():
                 duration = time.time()-start_time
                 print('Step %d (%.2f op/sec): Training MSE: %.5f, Validation MSE: %.5f' % (
                     step, 1.0/duration, np.float32(train_loss).item(), np.float32(valid_loss).item()))
-            if step%1000 != 0:
-                checkpoint_path = os.path.join(FLAGS.checkpoints_dir,'model.ckpt')
-                saver.save(sess, checkpoint_path, global_step=step)
             step+=1
+
+        checkpoint_path = os.path.join(FLAGS.checkpoints_dir,'model.ckpt')
+        saver.save(sess, checkpoint_path, global_step=step)
             
         feed_dict = fill_feed_dict(test_dataset, x, y_, train = False)
         test_loss = sess.run([loss], feed_dict = feed_dict)

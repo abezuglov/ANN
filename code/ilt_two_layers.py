@@ -41,9 +41,9 @@ def variable_summaries(var, name):
     name -- variable name
     """
     mean = tf.reduce_mean(var)
-    tf.scalar_summary(name+'/mean', mean)
+    #tf.scalar_summary(name+'/mean', mean)
     stddev = tf.reduce_mean(tf.reduce_sum(tf.square(var-mean)))
-    tf.scalar_summary(name+'/stddev', stddev)
+    #tf.scalar_summary(name+'/stddev', stddev)
     #_min = tf.reduce_min(var)
     #tf.scalar_summary(name+'/min', _min)
     #_max = tf.reduce_max(var)
@@ -94,7 +94,7 @@ def loss(nn_outputs, true_outputs):
     MSE -- Mean Squared Error (MSE), i.e. the losses tensor
     """
     prediction_diff = nn_outputs-true_outputs
-    MSE = tf.cast(tf.reduce_mean(tf.reduce_mean(tf.square(-prediction_diff))),tf.float32)
+    MSE = tf.cast(tf.reduce_mean(tf.reduce_mean(tf.square(prediction_diff))),tf.float32)
     
     # Save MSE to the collection 
     tf.add_to_collection('losses',MSE)
