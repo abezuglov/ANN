@@ -54,16 +54,24 @@ def maybe_load(file_names):
             print("Processed %d/%d \n"%(i,len(file_names)))
     return dataset
 
-
+# Class representing datasets
 class Dataset(object):
     def __init__(self,
                  inputs,
-                 outputs):
+                 outputs,
+                 means = None,
+                 stds = None):
         self._inputs = inputs
         self._outputs = outputs
+        if means is None:
+            print("calculate new means, stds for dataset with %d samples"%inputs.shape[0])
+            self._means, self._stds = self.calc_moments()
+        else:
+            print("using provided means, stds for dataset with %d samples"%inputs.shape[0])
+            self._means = means
+            self._stds = stds
         self._epochs_completed = 0
         self._index_in_epoch = 0
-        #print("num examples %d" %inputs.shape[0])
         self._num_examples = inputs.shape[0]
 
     @property
@@ -81,6 +89,22 @@ class Dataset(object):
     @property
     def epochs_completed(self):
         return self._epochs_completed
+
+    @property
+    def means(self):
+        return self._means
+
+    @property
+    def stds(self):
+        return self._stds
+
+    def calc_moments(self):
+        """
+        Calculate and return moments (mean, std)
+        """
+        means = [np.mean(self.inputs[:,i]) for i in range(self.inputs.shape[1])]
+        stds = [np.std(self.inputs[:,i]) for i in range(self.inputs.shape[1])]
+        return means, stds
 
     def next_batch(self, batch_size = 0):
         """
@@ -154,24 +178,20 @@ def read_data_sets(url_from = 'http://mrtee.europa.renci.org/~bblanton/ANN/',
     # calculate means and stds for training dataset
     input_means = [np.mean(train_dataset2[:,i]) for i in range(train_dataset2.shape[1])]
     input_stds = [np.std(train_dataset2[:,i]) for i in range(train_dataset2.shape[1])]
-    output_means = [np.mean(train_output[:,i]) for i in range(train_output.shape[1])]
-    output_stds = [np.std(train_output[:,i]) for i in range(train_output.shape[1])]
 
-    train_dataset2 = normalize(train_dataset2, input_means, input_stds)
-    train_output = normalize(train_output, output_means, output_stds)
+    valid_dataset2 = valid_dataset[:,:,1:7].reshape((-1, 6)).astype(np.float32)
+    valid_output = valid_dataset[:,:,8:10].reshape((-1, 2)).astype(np.float32)
 
-    #print(train_dataset2.shape)
-    #print(train_output)
+    test_dataset2 = test_dataset[:,:,1:7].reshape((-1, 6)).astype(np.float32)
+    test_output = test_dataset[:,:,8:10].reshape((-1, 2)).astype(np.float32)
 
-    valid_dataset2 = normalize(valid_dataset[:,:,1:7].reshape((-1, 6)).astype(np.float32), input_means, input_stds)
-    valid_output = normalize(valid_dataset[:,:,8:10].reshape((-1, 2)).astype(np.float32), output_means, output_stds)
-
-    test_dataset2 = normalize(test_dataset[:,:,1:7].reshape((-1, 6)).astype(np.float32),input_means, input_stds)
-    test_output = normalize(test_dataset[:,:,8:10].reshape((-1, 2)).astype(np.float32), output_means, output_stds)
 
     train = Dataset(train_dataset2, train_output)
-    valid = Dataset(valid_dataset2, valid_output)
-    test = Dataset(test_dataset2, test_output)
+
+    # Create validation and test datasets. The moments are added for compatibility.
+    # Only training dataset moments are used.
+    valid = Dataset(valid_dataset2, valid_output, means = train.means, stds = train.stds)
+    test = Dataset(test_dataset2, test_output, means = train.means, stds = train.stds)
 
     del(train_dataset2)
     del(train_output)

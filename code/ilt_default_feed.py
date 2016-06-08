@@ -16,10 +16,10 @@ flags.DEFINE_boolean('train', False, 'When True, run training & save model. When
 # Learning rate is important for model training. 
 # Decrease learning rate for more complicated models.
 # Increase if convergence is slow but steady
-flags.DEFINE_float('learning_rate', 0.05, 'Initial learning rate')
+flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate')
 flags.DEFINE_float('learning_rate_decay', 0.1, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
-flags.DEFINE_integer('max_steps', 1001, 'Number of steps to run trainer')
-flags.DEFINE_float('max_loss', 0.1, 'Max acceptable validation MSE')
+flags.DEFINE_integer('max_steps', 501, 'Number of steps to run trainer')
+flags.DEFINE_float('max_loss', 0.01, 'Max acceptable validation MSE')
 flags.DEFINE_float('moving_avg_decay', 0.999, 'Moving average decay for training variables')
 
 # Split the training data into batches. Each hurricane is 193 records. Batch sizes are usually 2^k
@@ -39,15 +39,6 @@ flags.DEFINE_string('summaries_dir','./logs','Summaries directory')
 
 # Output data
 flags.DEFINE_string('output','./model.txt','Save ANN outputs to this file')
-
-def placeholder_inputs():
-    """
-    Returns placeholders for inputs and expected outputs
-    """
-    with tf.name_scope('input'):
-        x = tf.placeholder(tf.float32, [None, FLAGS.input_vars], name='x-input')
-        y_ = tf.placeholder(tf.float32, [None, FLAGS.output_vars], name = 'y-input')
-    return x, y_
 
 def fill_feed_dict(data_set, inputs_pl, outputs_pl, train):
     """
@@ -76,8 +67,24 @@ def train():
     """
     Finish building the graph and run training on a single CPU's
     """
+    # Read datasets 
+    train_dataset, valid_dataset, test_dataset = ld.read_data_sets()
+
     with tf.Graph().as_default(), tf.device('/cpu:0'):
-        x, y_ = placeholder_inputs()
+        # Prepare placeholders for inputs and expected outputs
+        x = tf.placeholder(tf.float32, [None, FLAGS.input_vars], name='x-input')
+        y_ = tf.placeholder(tf.float32, [None, FLAGS.output_vars], name = 'y-input')
+
+        # Create variables for input data moments and initialize them with train datasets' moments
+        means = tf.get_variable('means', trainable = False, 
+                                initializer = tf.convert_to_tensor(train_dataset.means))
+        stds = tf.get_variable('stds', trainable = False, 
+                                initializer = tf.convert_to_tensor(train_dataset.stds))
+
+        # Normalize input data
+        x_normalized = tf.div(tf.sub(x,means),stds)
+
+        # Prepare global step and learning rate for optimization
         global_step = tf.get_variable(
             'global_step', [], 
             initializer=tf.constant_initializer(0), trainable=False)
@@ -85,18 +92,17 @@ def train():
             FLAGS.learning_rate, global_step, FLAGS.max_steps,
             FLAGS.learning_rate_decay, staircase=False)        
 
-        # create a standard gradient descent optimizer
-        #optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+        # Create ADAM optimizer
         optimizer = tf.train.AdamOptimizer(learning_rate)
-        outputs = ilt.inference(x)
+        outputs = ilt.inference(x_normalized)
         loss = ilt.loss(outputs, y_)
         tf.scalar_summary('MSE', loss)
 
+        # Calculate gradients and apply them
         grads = optimizer.compute_gradients(loss)
-        
-        # apply the gradients to the model
         apply_gradient_op = optimizer.apply_gradients(grads, global_step = global_step)
 
+        # Smoothen variables after gradient applications
         variable_averages = tf.train.ExponentialMovingAverage(
             FLAGS.moving_avg_decay, global_step)
         variables_averages_op = variable_averages.apply(tf.trainable_variables())
@@ -115,13 +121,9 @@ def train():
         test_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/validation/'+date_time_stamp, sess.graph)
         saver = tf.train.Saver()
 
-        # Below is the code for running graph
+        # Finish graph creation. Below is the code for running graph
         sess.run(init)
-
         tf.train.start_queue_runners(sess=sess)
-
-        # Assign datasets 
-        train_dataset, valid_dataset, test_dataset = ld.read_data_sets()
 
         valid_loss = 1.0
         train_loss = 1.0
@@ -129,19 +131,18 @@ def train():
         # Main training loop
         while valid_loss > FLAGS.max_loss and step < FLAGS.max_steps:
             start_time = time.time()
-            if step%100 != 0:
-                # regular training
-                feed_dict = fill_feed_dict(train_dataset, x, y_, train = True)
-                
-                _, train_loss, summary, lr = sess.run([train_op, loss, merged, learning_rate], feed_dict=feed_dict)
-                duration = time.time()-start_time
-                train_writer.add_summary(summary,step)
-            else:
+            # regular training
+            
+            _, train_loss, summary, lr = sess.run(
+                [train_op, loss, merged, learning_rate], feed_dict=fill_feed_dict(train_dataset, x, y_, train = True))
+
+            duration = time.time()-start_time
+            train_writer.add_summary(summary,step)
+            if step%(FLAGS.max_steps//20) == 0:
                 # check model fit
                 feed_dict = fill_feed_dict(valid_dataset, x, y_, train = False)
                 valid_loss, summary = sess.run([loss, merged], feed_dict = feed_dict)
                 test_writer.add_summary(summary,step)
-                duration = time.time()-start_time
                 print('Step %d (%.2f op/sec): Training MSE: %.5f, Validation MSE: %.5f' % (
                     step, 1.0/duration, np.float32(train_loss).item(), np.float32(valid_loss).item()))
             step+=1
@@ -159,8 +160,17 @@ def run():
     Finish building the graph and run it on the default device
     """
     with tf.Graph().as_default(), tf.device('/cpu:0'):
-        x, y_ = placeholder_inputs()
-        outputs = ilt.inference(x)
+        # Prepare placeholders for inputs and expected outputs
+        x = tf.placeholder(tf.float32, [None, FLAGS.input_vars], name='x-input')
+        y_ = tf.placeholder(tf.float32, [None, FLAGS.output_vars], name = 'y-input')
+
+        means = tf.get_variable('means', shape=[FLAGS.input_vars], trainable = False)
+        stds = tf.get_variable('stds', shape=[FLAGS.input_vars], trainable = False)
+
+        # Normalize input data
+        x_normalized = tf.div(tf.sub(x,means),stds)
+
+        outputs = ilt.inference(x_normalized)
         loss = ilt.loss(outputs, y_)
 
         init = tf.initialize_all_variables()

@@ -9,8 +9,8 @@ import datetime as dt
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_integer('hidden1', 25, 'Size of the first hidden layer')
-flags.DEFINE_integer('hidden2', 8, 'Size of the second hidden layer')
+flags.DEFINE_integer('hidden1', 60, 'Size of the first hidden layer')
+flags.DEFINE_integer('hidden2', 30, 'Size of the second hidden layer')
 flags.DEFINE_integer('output_vars', 2, 'Size of the output layer')
 flags.DEFINE_integer('input_vars', 6, 'Size of the input layer')
 
