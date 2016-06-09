@@ -11,13 +11,13 @@ import ilt_two_layers as ilt
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_boolean('train', False, ' If True, run training & save model, otherwise -- load a previously saved model and evaluate it')
+flags.DEFINE_boolean('train', True, ' If True, run training & save model, otherwise -- load a previously saved model and evaluate it')
 
 # Learning rate is important for model training. 
 # Decrease learning rate for more complicated models.
 # Increase if convergence is steady but too slow
 flags.DEFINE_float('learning_rate', 0.05, 'Initial learning rate')
-flags.DEFINE_float('learning_rate_decay', 0.5, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
+flags.DEFINE_float('learning_rate_decay', 0.1, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
 flags.DEFINE_integer('max_steps', 500, 'Number of steps to run trainer')
 flags.DEFINE_float('max_loss', 0.01, 'Max acceptable validation MSE')
 flags.DEFINE_float('moving_avg_decay', 0.999, 'Moving average decay for training variables')
@@ -285,7 +285,6 @@ def run():
         np.savetxt(FLAGS.output,out)
         print('Outputs saved as %s'%FLAGS.output)
         sess.close()
-
 
 def main(argv):
     if(FLAGS.train):

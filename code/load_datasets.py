@@ -98,6 +98,10 @@ class Dataset(object):
     def stds(self):
         return self._stds
 
+    @property
+    def num_hurricanes(self):
+        return self._num_examples//193
+
     def calc_moments(self):
         """
         Calculate and return moments (mean, std)
@@ -199,7 +203,7 @@ def read_data_sets(url_from = 'http://mrtee.europa.renci.org/~bblanton/ANN/',
     del(valid_output)
     del(test_dataset2)
     del(test_output)
-    print("Num examples in train %d, validation %d, test %d" % (train.num_examples, valid.num_examples, test.num_examples))
+    print("Num hurricanes in train %d, validation %d, test %d" % (train.num_hurricanes, valid.num_hurricanes, test.num_hurricanes))
     return train, valid, test
 
 
