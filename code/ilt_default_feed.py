@@ -11,7 +11,7 @@ import ilt_two_layers as ilt
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_boolean('train', True, 'When True, run training & save model. When False, load a previously saved model and evaluate it')
+flags.DEFINE_boolean('train', False, 'When True, run training & save model. When False, load a previously saved model and evaluate it')
 
 # Learning rate is important for model training. 
 # Decrease learning rate for more complicated models.
@@ -37,8 +37,11 @@ flags.DEFINE_string('checkpoints_dir', './checkpoints', 'Directory to store chec
 # Statistics
 flags.DEFINE_string('summaries_dir','./logs','Summaries directory')
 
-# Output data
-flags.DEFINE_string('output','./model.txt','Save ANN outputs to this file')
+# Evaluation
+# Output dataset
+flags.DEFINE_string('output','./test_track_out2.dat','When model evaluation, output the data here')
+# Input dataset
+flags.DEFINE_string('input','./test_track.dat','Dataset for input')
 
 def fill_feed_dict(data_set, inputs_pl, outputs_pl, train):
     """
@@ -159,10 +162,12 @@ def run():
     """
     Finish building the graph and run it on the default device
     """
+    # Assign datasets 
+    test_ds = np.loadtxt(FLAGS.input)[:,1:7].reshape((-1, 6)).astype(np.float32)
+
     with tf.Graph().as_default(), tf.device('/cpu:0'):
         # Prepare placeholders for inputs and expected outputs
         x = tf.placeholder(tf.float32, [None, FLAGS.input_vars], name='x-input')
-        y_ = tf.placeholder(tf.float32, [None, FLAGS.output_vars], name = 'y-input')
 
         means = tf.get_variable('means', shape=[FLAGS.input_vars], trainable = False)
         stds = tf.get_variable('stds', shape=[FLAGS.input_vars], trainable = False)
@@ -171,7 +176,6 @@ def run():
         x_normalized = tf.div(tf.sub(x,means),stds)
 
         outputs = ilt.inference(x_normalized)
-        loss = ilt.loss(outputs, y_)
 
         init = tf.initialize_all_variables()
         sess = tf.Session(config = tf.ConfigProto(
@@ -193,13 +197,9 @@ def run():
 
         tf.train.start_queue_runners(sess=sess)
 
-        # Assign datasets 
-        train_dataset, valid_dataset, test_dataset = ld.read_data_sets()
-        feed_dict = fill_feed_dict(train_dataset, x, y_, train = False)
-        test_loss, out = sess.run([loss, outputs], feed_dict = feed_dict)
+        out = sess.run(outputs, feed_dict = {x:test_ds})
         duration = time.time()-start_time
-        print('Elapsed time: %.2f sec. Test MSE: %.5f' % (duration, np.float32(test_loss).item()))
-        print(out.shape)
+        print('Elapsed time: %.2f sec.' % (duration))
         np.savetxt(FLAGS.output,out)
         print('Outputs saved as %s'%FLAGS.output)
         sess.close()

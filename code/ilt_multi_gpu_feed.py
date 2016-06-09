@@ -11,17 +11,18 @@ import ilt_two_layers as ilt
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_boolean('train', True, 'When True, run training & save model. When False, load a previously saved model and evaluate it')
+flags.DEFINE_boolean('train', False, ' If True, run training & save model, otherwise -- load a previously saved model and evaluate it')
 
 # Learning rate is important for model training. 
 # Decrease learning rate for more complicated models.
-# Increase if convergence is slow but steady
+# Increase if convergence is steady but too slow
 flags.DEFINE_float('learning_rate', 0.05, 'Initial learning rate')
-flags.DEFINE_float('learning_rate_decay', 0.1, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
+flags.DEFINE_float('learning_rate_decay', 0.5, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
 flags.DEFINE_integer('max_steps', 500, 'Number of steps to run trainer')
 flags.DEFINE_float('max_loss', 0.01, 'Max acceptable validation MSE')
 flags.DEFINE_float('moving_avg_decay', 0.999, 'Moving average decay for training variables')
 
+# Multi-GPU settings
 flags.DEFINE_integer('num_gpus',2,'Number of GPUs in the system')
 flags.DEFINE_string('tower_name','ivy','Tower names')
 
@@ -34,14 +35,17 @@ flags.DEFINE_integer('batch_size', 64*193, 'Batch size. Divides evenly into the 
 # train_dataset, valid_dataset, and test_dataset
 #flags.DEFINE_string('train_dir', './data/', 'Directory to put the training data')
 
-# Save models in this directory. TODO: save/load models
+# Save models in this directory
 flags.DEFINE_string('checkpoints_dir', './checkpoints', 'Directory to store checkpoints')
 
 # Statistics
 flags.DEFINE_string('summaries_dir','./logs','Summaries directory')
 
-# Output data
-flags.DEFINE_string('output','./model.txt','When model evaluation, output the data here')
+# Evaluation
+# Output dataset
+flags.DEFINE_string('output','./test_track_out2.dat','When model evaluation, output the data here')
+# Input dataset
+flags.DEFINE_string('input','./test_track.dat','Dataset for input')
 
 def fill_feed_dict(data_set, inputs_pl, outputs_pl, train):
     """
@@ -197,8 +201,8 @@ def train():
             log_device_placement = False)) # shows GPU/CPU allocation
         # Prepare folders for saving models and its stats
         date_time_stamp = dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        train_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/train/'+date_time_stamp, sess.graph)
-        test_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/validation/'+date_time_stamp, sess.graph)
+        #train_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/train/'+date_time_stamp, sess.graph)
+        #test_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/validation/'+date_time_stamp, sess.graph)
         saver = tf.train.Saver(tf.all_variables())
 
         # Below is the code for running graph
@@ -217,12 +221,12 @@ def train():
                 
             _, train_loss, summary, lr = sess.run([train_op, loss, merged, learning_rate], feed_dict=feed_dict)
             duration = time.time()-start_time
-            train_writer.add_summary(summary,step)
+            #train_writer.add_summary(summary,step)
             if step%(FLAGS.max_steps//20) == 0:
                 # check model fit
                 feed_dict = fill_feed_dict(valid_dataset, x, y_, train = False)
                 valid_loss, summary = sess.run([loss, merged], feed_dict = feed_dict)
-                test_writer.add_summary(summary,step)
+                #test_writer.add_summary(summary,step)
                 duration = time.time()-start_time
                 print('Step %d (%.2f op/sec): Training MSE: %.5f, Validation MSE: %.5f' % (
                     step, 1.0/duration, np.float32(train_loss).item(), np.float32(valid_loss).item()))
@@ -238,12 +242,14 @@ def train():
 
 def run():
     """
-    Finish building the graph and run it on a single CPU's
+    Finish building the graph and run it at the default device (CPU or GPU)
     """
+    # Assign datasets 
+    test_ds = np.loadtxt(FLAGS.input)[:,1:7].reshape((-1, 6)).astype(np.float32)
+
     with tf.Graph().as_default(), tf.device('/cpu:0'):
         # Prepare placeholders for inputs and expected outputs
         x = tf.placeholder(tf.float32, [None, FLAGS.input_vars], name='x-input')
-        y_ = tf.placeholder(tf.float32, [None, FLAGS.output_vars], name = 'y-input')
 
         means = tf.get_variable('means', shape=[FLAGS.input_vars], trainable = False)
         stds = tf.get_variable('stds', shape=[FLAGS.input_vars], trainable = False)
@@ -252,7 +258,6 @@ def run():
         x_normalized = tf.div(tf.sub(x,means),stds)
 
         outputs = ilt.inference(x_normalized)
-        loss = ilt.loss(outputs, y_)
 
         init = tf.initialize_all_variables()
         sess = tf.Session(config = tf.ConfigProto(
@@ -265,7 +270,7 @@ def run():
 
         saver = tf.train.Saver()
         ckpt = tf.train.get_checkpoint_state(FLAGS.checkpoints_dir)
-        if ckpt.model_checkpoint_path:
+        if ckpt != None and ckpt.model_checkpoint_path:
             saver.restore(sess, ckpt.model_checkpoint_path)
             print("Model %s restored"%ckpt.model_checkpoint_path)
         else:
@@ -273,14 +278,10 @@ def run():
             return
 
         tf.train.start_queue_runners(sess=sess)
-
-        # Assign datasets 
-        train_dataset, valid_dataset, test_dataset = ld.read_data_sets()
-        feed_dict = fill_feed_dict(train_dataset, x, y_, train = False)
-        test_loss, out = sess.run([loss, outputs], feed_dict = feed_dict)
+        
+        out = sess.run(outputs, feed_dict = {x:test_ds})
         duration = time.time()-start_time
-        print('Elapsed time: %.2f sec. Test MSE: %.5f' % (duration, np.float32(test_loss).item()))
-        print(out.shape)
+        print('Elapsed time: %.2f sec.' % (duration))
         np.savetxt(FLAGS.output,out)
         print('Outputs saved as %s'%FLAGS.output)
         sess.close()
