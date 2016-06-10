@@ -11,16 +11,7 @@ import ilt_two_layers as ilt
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_boolean('train', False, 'When True, run training & save model. When False, load a previously saved model and evaluate it')
-
-# Learning rate is important for model training. 
-# Decrease learning rate for more complicated models.
-# Increase if convergence is slow but steady
-flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate')
-flags.DEFINE_float('learning_rate_decay', 0.1, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
-flags.DEFINE_integer('max_steps', 501, 'Number of steps to run trainer')
-flags.DEFINE_float('max_loss', 0.01, 'Max acceptable validation MSE')
-flags.DEFINE_float('moving_avg_decay', 0.999, 'Moving average decay for training variables')
+flags.DEFINE_boolean('train', True, 'When True, run training & save model. When False, load a previously saved model and evaluate it')
 
 # Split the training data into batches. Each hurricane is 193 records. Batch sizes are usually 2^k
 # When batch size equals to 0, or exceeds available data, use the whole dataset
@@ -120,8 +111,8 @@ def train():
             log_device_placement = False)) # shows GPU/CPU allocation
         # Prepare folders for saving models and its stats
         date_time_stamp = dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        train_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/train/'+date_time_stamp, sess.graph)
-        test_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/validation/'+date_time_stamp, sess.graph)
+        #train_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/train/'+date_time_stamp, sess.graph)
+        #test_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/validation/'+date_time_stamp, sess.graph)
         saver = tf.train.Saver()
 
         # Finish graph creation. Below is the code for running graph
@@ -140,12 +131,12 @@ def train():
                 [train_op, loss, merged, learning_rate], feed_dict=fill_feed_dict(train_dataset, x, y_, train = True))
 
             duration = time.time()-start_time
-            train_writer.add_summary(summary,step)
+            #train_writer.add_summary(summary,step)
             if step%(FLAGS.max_steps//20) == 0:
                 # check model fit
                 feed_dict = fill_feed_dict(valid_dataset, x, y_, train = False)
                 valid_loss, summary = sess.run([loss, merged], feed_dict = feed_dict)
-                test_writer.add_summary(summary,step)
+                #test_writer.add_summary(summary,step)
                 print('Step %d (%.2f op/sec): Training MSE: %.5f, Validation MSE: %.5f' % (
                     step, 1.0/duration, np.float32(train_loss).item(), np.float32(valid_loss).item()))
             step+=1
