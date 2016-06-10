@@ -6,7 +6,7 @@ import time
 import tensorflow as tf
 import load_datasets as ld
 import datetime as dt
-import ilt_one_layer as ilt
+import ilt_two_layers as ilt
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -34,7 +34,7 @@ flags.DEFINE_string('summaries_dir','./logs','Summaries directory')
 
 # Evaluation
 # Output dataset
-flags.DEFINE_string('output','./test_track_out.dat','When model evaluation, output the data here')
+flags.DEFINE_string('output','./test_track_out2.dat','When model evaluation, output the data here')
 # Input dataset
 flags.DEFINE_string('input','./test_track.dat','Dataset for input')
 
@@ -163,7 +163,6 @@ def train():
                     tower_grads.append(grads)
 
         summaries.append(tf.scalar_summary('MSE',loss))
-        summaries.append(tf.scalar_summary('CC',tf.get_collection('cc')[0]))
 
         # calculate average gradients
         grads = average_gradients(tower_grads)
@@ -207,7 +206,7 @@ def train():
         train_loss = 1.0
         step = 1
         # Main training loop
-        while valid_loss > FLAGS.max_loss and step < FLAGS.max_steps:
+        for step in xrange(FLAGS.max_steps):
             start_time = time.time()
             # regular training
             feed_dict = fill_feed_dict(train_dataset, x, y_, train = True)
@@ -221,10 +220,8 @@ def train():
                 valid_loss, summary = sess.run([loss, merged], feed_dict = feed_dict)
                 test_writer.add_summary(summary,step)
                 duration = time.time()-start_time
-                
                 print('Step %d (%.2f op/sec): Training MSE: %.5f, Validation MSE: %.5f' % (
                     step, 1.0/duration, np.float32(train_loss).item(), np.float32(valid_loss).item()))
-            step+=1
 
         checkpoint_path = os.path.join(FLAGS.checkpoints_dir,'model.ckpt')
         saver.save(sess, checkpoint_path, global_step=step)

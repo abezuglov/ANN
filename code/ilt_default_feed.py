@@ -123,7 +123,7 @@ def train():
         train_loss = 1.0
         step = 1
         # Main training loop
-        while valid_loss > FLAGS.max_loss and step < FLAGS.max_steps:
+        for step in xrange(FLAGS.max_steps):
             start_time = time.time()
             # regular training
             
@@ -139,7 +139,6 @@ def train():
                 #test_writer.add_summary(summary,step)
                 print('Step %d (%.2f op/sec): Training MSE: %.5f, Validation MSE: %.5f' % (
                     step, 1.0/duration, np.float32(train_loss).item(), np.float32(valid_loss).item()))
-            step+=1
 
         checkpoint_path = os.path.join(FLAGS.checkpoints_dir,'model.ckpt')
         saver.save(sess, checkpoint_path, global_step=step)
