@@ -11,7 +11,7 @@ import ilt_two_layers as ilt
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_boolean('train', False, ' If True, run training & save model, otherwise -- load a previously saved model and evaluate it')
+flags.DEFINE_boolean('train', True, ' If True, run training & save model, otherwise -- load a previously saved model and evaluate it')
 
 # Multi-GPU settings
 flags.DEFINE_integer('num_gpus',2,'Number of GPUs in the system')
@@ -163,6 +163,7 @@ def train():
                     tower_grads.append(grads)
 
         summaries.append(tf.scalar_summary('MSE',loss))
+        summaries.append(tf.scalar_summary('CC',tf.get_collection('cc')[0]))
 
         # calculate average gradients
         grads = average_gradients(tower_grads)

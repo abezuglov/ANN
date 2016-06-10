@@ -91,6 +91,8 @@ def train():
         outputs = ilt.inference(x_normalized)
         loss = ilt.loss(outputs, y_)
         tf.scalar_summary('MSE', loss)
+        tf.scalar_summary('CC',tf.get_collection('cc')[0])
+
 
         # Calculate gradients and apply them
         grads = optimizer.compute_gradients(loss)
@@ -111,8 +113,8 @@ def train():
             log_device_placement = False)) # shows GPU/CPU allocation
         # Prepare folders for saving models and its stats
         date_time_stamp = dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        #train_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/train/'+date_time_stamp, sess.graph)
-        #test_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/validation/'+date_time_stamp, sess.graph)
+        train_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/train/'+date_time_stamp) #, sess.graph)
+        test_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/validation/'+date_time_stamp) #, sess.graph)
         saver = tf.train.Saver()
 
         # Finish graph creation. Below is the code for running graph
@@ -131,12 +133,12 @@ def train():
                 [train_op, loss, merged, learning_rate], feed_dict=fill_feed_dict(train_dataset, x, y_, train = True))
 
             duration = time.time()-start_time
-            #train_writer.add_summary(summary,step)
+            train_writer.add_summary(summary,step)
             if step%(FLAGS.max_steps//20) == 0:
                 # check model fit
                 feed_dict = fill_feed_dict(valid_dataset, x, y_, train = False)
                 valid_loss, summary = sess.run([loss, merged], feed_dict = feed_dict)
-                #test_writer.add_summary(summary,step)
+                test_writer.add_summary(summary,step)
                 print('Step %d (%.2f op/sec): Training MSE: %.5f, Validation MSE: %.5f' % (
                     step, 1.0/duration, np.float32(train_loss).item(), np.float32(valid_loss).item()))
 
