@@ -6,7 +6,7 @@ import time
 import tensorflow as tf
 import load_datasets as ld
 import datetime as dt
-import ilt_three_layers as ilt
+import ilt_two_layers as ilt
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -156,20 +156,21 @@ def train():
                     # Make sure that the vars are reused for the next tower
                     tf.get_variable_scope().reuse_variables()
 
-                    #summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
+                    summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
                     
                     # calculate the gradients and add them to the list
                     grads = optimizer.compute_gradients(loss)
                     tower_grads.append(grads)
 
-        tf.scalar_summary('MSE',loss)
+        summaries.append(tf.scalar_summary('MSE',loss))
 
         # calculate average gradients
         grads = average_gradients(tower_grads)
 
         #for grad, var in grads:
-        #    if grad is not None:
-        #        summaries.append(tf.histogram_summary(var.op.name+'/gradients', grad))
+            #if grad is not None:
+            #summaries.append(tf.histogram_summary(var.op.name+'/gradients', grad))
+            #summaries.append(tf.scalar_summary(var.op.name+'/sparsity',tf.nn.zero_fraction(var)))
 
         # apply the gradients to the model
         apply_gradient_op = optimizer.apply_gradients(grads, global_step = global_step)
@@ -192,8 +193,8 @@ def train():
             log_device_placement = False)) # shows GPU/CPU allocation
         # Prepare folders for saving models and its stats
         date_time_stamp = dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        #train_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/train/'+date_time_stamp, sess.graph)
-        #test_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/validation/'+date_time_stamp, sess.graph)
+        train_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/train/'+date_time_stamp) #,sess.graph)
+        test_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/validation/'+date_time_stamp)
         saver = tf.train.Saver(tf.all_variables())
 
         # Below is the code for running graph
@@ -212,12 +213,12 @@ def train():
                 
             _, train_loss, summary, lr = sess.run([train_op, loss, merged, learning_rate], feed_dict=feed_dict)
             duration = time.time()-start_time
-            #train_writer.add_summary(summary,step)
+            train_writer.add_summary(summary,step)
             if step%(FLAGS.max_steps//20) == 0:
                 # check model fit
                 feed_dict = fill_feed_dict(valid_dataset, x, y_, train = False)
                 valid_loss, summary = sess.run([loss, merged], feed_dict = feed_dict)
-                #test_writer.add_summary(summary,step)
+                test_writer.add_summary(summary,step)
                 duration = time.time()-start_time
                 print('Step %d (%.2f op/sec): Training MSE: %.5f, Validation MSE: %.5f' % (
                     step, 1.0/duration, np.float32(train_loss).item(), np.float32(valid_loss).item()))

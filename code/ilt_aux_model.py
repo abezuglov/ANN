@@ -22,19 +22,20 @@ def bias_variable(name, shape):
 
 def variable_summaries(var, name):
     """
-    Adds multiple (excessive) summaries (statistics) for a TF variable
+    Add multiple (excessive) summaries (statistics) for a TF variable
     var -- TF variable
     name -- variable name
     """
-    mean = tf.reduce_mean(var)
+    #mean = tf.reduce_mean(var)
     #tf.scalar_summary(name+'/mean', mean)
-    stddev = tf.reduce_mean(tf.reduce_sum(tf.square(var-mean)))
+    #stddev = tf.reduce_mean(tf.reduce_sum(tf.square(var-mean)))
     #tf.scalar_summary(name+'/stddev', stddev)
     #_min = tf.reduce_min(var)
     #tf.scalar_summary(name+'/min', _min)
     #_max = tf.reduce_max(var)
     #tf.scalar_summary(name+'/max', _max)
-    tf.histogram_summary(name, var)
+    #tf.histogram_summary(name, var)
+    #tf.scalar_summary(name+'/sparsity',tf.nn.zero_fraction(var))
 
 def nn_layer(input_tensor, input_dim, output_dim, layer_name, act = tf.tanh):
     """
