@@ -20,7 +20,7 @@ flags.DEFINE_integer('input_vars', 6, 'Size of the input layer')
 # Decrease learning rate for more complicated models.
 # Increase if convergence is steady but too slow
 flags.DEFINE_float('learning_rate', 0.05, 'Initial learning rate')
-flags.DEFINE_float('learning_rate_decay', 0.1, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
+flags.DEFINE_float('learning_rate_decay', 0.3, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
 flags.DEFINE_integer('max_steps', 500, 'Number of steps to run trainer')
 #flags.DEFINE_float('max_loss', 0.01, 'Max acceptable validation MSE')
 flags.DEFINE_float('moving_avg_decay', 0.999, 'Moving average decay for training variables')
@@ -45,9 +45,16 @@ def loss(nn_outputs, true_outputs):
     """
     prediction_diff = nn_outputs-true_outputs
     MSE = tf.cast(tf.reduce_mean(tf.reduce_mean(tf.square(prediction_diff))),tf.float32)
-    
+
+    a = tf.reduce_mean(tf.mul(tf.sub(nn_outputs,tf.reduce_mean(nn_outputs)),tf.sub(true_outputs,tf.reduce_mean(true_outputs))))
+    b1 = tf.sqrt(tf.reduce_mean(tf.square(tf.sub(nn_outputs, tf.reduce_mean(nn_outputs)))))
+    b2 = tf.sqrt(tf.reduce_mean(tf.square(tf.sub(true_outputs, tf.reduce_mean(true_outputs)))))
+    cc = tf.div(a,tf.mul(b1,b2))
+
     # Save MSE to the collection 
     tf.add_to_collection('losses',MSE)
+    tf.add_to_collection('cc',cc)
+
     return MSE
     
 def training(MSE, learning_rate):

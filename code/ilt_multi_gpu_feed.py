@@ -11,7 +11,7 @@ import ilt_two_layers as ilt
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_boolean('train', True, ' If True, run training & save model, otherwise -- load a previously saved model and evaluate it')
+flags.DEFINE_boolean('train', False, ' If True, run training & save model, otherwise -- load a previously saved model and evaluate it')
 
 # Multi-GPU settings
 flags.DEFINE_integer('num_gpus',2,'Number of GPUs in the system')
@@ -34,9 +34,9 @@ flags.DEFINE_string('summaries_dir','./logs','Summaries directory')
 
 # Evaluation
 # Output dataset
-flags.DEFINE_string('output','./test_track_out2.dat','When model evaluation, output the data here')
+flags.DEFINE_string('output','./test_tracks_out/isabel_test_track_out.dat','When model evaluation, output the data here')
 # Input dataset
-flags.DEFINE_string('input','./test_track.dat','Dataset for input')
+flags.DEFINE_string('input','./test_tracks/isabel_test_track.dat','Dataset for input')
 
 def fill_feed_dict(data_set, inputs_pl, outputs_pl, train):
     """
