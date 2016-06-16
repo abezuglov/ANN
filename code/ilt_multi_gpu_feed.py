@@ -36,7 +36,7 @@ flags.DEFINE_string('summaries_dir','./logs','Summaries directory')
 # Output dataset
 flags.DEFINE_string('output','./test_tracks_out/isabel_test_track_out.dat','When model evaluation, output the data here')
 # Input dataset
-flags.DEFINE_string('input','./test_tracks/isabel_test_track.dat','Dataset for input')
+flags.DEFINE_string('input','./test_tracks/isabel_test_track2.dat','Dataset for input')
 
 def fill_feed_dict(data_set, inputs_pl, outputs_pl, train):
     """
@@ -162,8 +162,10 @@ def train():
                     grads = optimizer.compute_gradients(loss)
                     tower_grads.append(grads)
 
+        # Add this here in case we need to get outputs after training is complete
+        outputs = ilt.inference(x_normalized)
+
         summaries.append(tf.scalar_summary('MSE',loss))
-        summaries.append(tf.scalar_summary('CC',tf.get_collection('cc')[0]))
 
         # calculate average gradients
         grads = average_gradients(tower_grads)
@@ -230,6 +232,14 @@ def train():
         feed_dict = fill_feed_dict(test_dataset, x, y_, train = False)
         test_loss = sess.run([loss], feed_dict = feed_dict)
         print('Test MSE: %.5f' % (np.float32(test_loss).item()))
+
+        print("Correlation coefficients: ")
+        outs = outputs.eval(session=sess, feed_dict = feed_dict)
+
+        for out_no in range(0,10):
+            print("CC at point %d: %.4f"%(
+                out_no,np.corrcoef(outs[:,out_no], test_dataset.outputs[:,out_no])[0,1]))
+
         sess.close()
 
 def run():

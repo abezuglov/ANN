@@ -11,10 +11,10 @@ flags = tf.app.flags
 FLAGS = flags.FLAGS
 
 # Structure of the network
-flags.DEFINE_integer('hidden1', 25, 'Size of the first hidden layer')
-flags.DEFINE_integer('hidden2', 8, 'Size of the second hidden layer')
-flags.DEFINE_integer('hidden3', 3, 'Size of the third hidden layer')
-flags.DEFINE_integer('output_vars', 2, 'Size of the output layer')
+flags.DEFINE_integer('hidden1', 100, 'Size of the first hidden layer')
+flags.DEFINE_integer('hidden2', 100, 'Size of the second hidden layer')
+flags.DEFINE_integer('hidden3', 100, 'Size of the third hidden layer')
+flags.DEFINE_integer('output_vars', 10, 'Size of the output layer')
 flags.DEFINE_integer('input_vars', 6, 'Size of the input layer')
 
 # Learning rate is important for model training. 
