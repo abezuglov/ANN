@@ -6,7 +6,7 @@ import time
 import tensorflow as tf
 import load_datasets as ld
 import datetime as dt
-import ilt_two_layers as ilt
+import ilt_density as ilt
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS

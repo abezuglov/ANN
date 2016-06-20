@@ -6,7 +6,7 @@ import time
 import tensorflow as tf
 import load_datasets as ld
 import datetime as dt
-import ilt_two_layers as ilt
+import ilt_density as ilt
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -90,8 +90,8 @@ def train():
         optimizer = tf.train.AdamOptimizer(learning_rate)
         outputs = ilt.inference(x_normalized)
         loss = ilt.loss(outputs, y_)
-        tf.scalar_summary('MSE', loss)
-        tf.scalar_summary('CC',tf.get_collection('cc')[0])
+        #tf.scalar_summary('MSE', loss)
+        #tf.scalar_summary('CC',tf.get_collection('cc')[0])
 
 
         # Calculate gradients and apply them
@@ -144,11 +144,20 @@ def train():
 
         checkpoint_path = os.path.join(FLAGS.checkpoints_dir,'model.ckpt')
         saver.save(sess, checkpoint_path, global_step=step)
-
+            
         feed_dict = fill_feed_dict(test_dataset, x, y_, train = False)
         test_loss = sess.run([loss], feed_dict = feed_dict)
         print('Test MSE: %.5f' % (np.float32(test_loss).item()))
+
+        print("Correlation coefficients: ")
+        outs = outputs.eval(session=sess, feed_dict = feed_dict)
+
+        for out_no in range(0,10):
+            print("CC at point %d: %.4f"%(
+                out_no,np.corrcoef(outs[:,out_no], test_dataset.outputs[:,out_no])[0,1]))
+
         sess.close()
+
 
 def run():
     """
