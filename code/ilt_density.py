@@ -12,7 +12,7 @@ flags = tf.app.flags
 FLAGS = flags.FLAGS
 
 # Structure of the network
-flags.DEFINE_integer('hidden', 80, 'Size of the first hidden layer')
+flags.DEFINE_integer('hidden', 150, 'Size of the first hidden layer')
 flags.DEFINE_integer('output_vars', 10, 'Size of the output layer') # no. of output vars
 flags.DEFINE_integer('input_vars', 6, 'Size of the input layer')
 

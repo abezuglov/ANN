@@ -7,6 +7,7 @@ import tensorflow as tf
 import load_datasets as ld
 import datetime as dt
 import ilt_density as ilt
+from sklearn.metrics import mean_squared_error
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -36,7 +37,7 @@ flags.DEFINE_string('summaries_dir','./logs','Summaries directory')
 # Output dataset
 flags.DEFINE_string('output','./test_tracks_out/isabel_test_track_out.dat','When model evaluation, output the data here')
 # Input dataset
-flags.DEFINE_string('input','./test_tracks/isabel_test_track2.dat','Dataset for input')
+flags.DEFINE_string('input','./test_tracks/isabel_test_track.dat','Dataset for input')
 
 def fill_feed_dict(data_set, inputs_pl, outputs_pl, train):
     """
@@ -223,7 +224,7 @@ def train():
                 valid_loss, summary = sess.run([loss, merged], feed_dict = feed_dict)
                 test_writer.add_summary(summary,step)
                 duration = time.time()-start_time
-                print('Step %d (%.2f op/sec): Training MSE: %.5f, Validation MSE: %.5f' % (
+                print('Step %d (%.2f op/sec): Training loss: %.5f, Validation loss: %.5f' % (
                     step, 1.0/duration, np.float32(train_loss).item(), np.float32(valid_loss).item()))
 
         checkpoint_path = os.path.join(FLAGS.checkpoints_dir,'model.ckpt')
@@ -236,9 +237,11 @@ def train():
         print("Correlation coefficients: ")
         outs = outputs.eval(session=sess, feed_dict = feed_dict)
 
-        for out_no in range(0,10):
-            print("CC at point %d: %.4f"%(
-                out_no,np.corrcoef(outs[:,out_no], test_dataset.outputs[:,out_no])[0,1]))
+        for out_no in range(0,FLAGS.output_vars):
+            print("Location %d: CC: %.4f, MSE: %.6f"%(
+                out_no,
+                np.corrcoef(outs[:,out_no], test_dataset.outputs[:,out_no])[0,1],
+                  mean_squared_error(outs[:,out_no], test_dataset.outputs[:,out_no])))
 
         sess.close()
 

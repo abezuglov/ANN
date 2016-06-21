@@ -156,7 +156,9 @@ def read_data_sets(directory = "../data/ann_dataset_10points"):
         if os.path.isdir(directory)]
 
     ds = maybe_load(file_names)
-    print(ds.shape)
+    #print(ds.shape)
+    #ds = np.delete(ds, [range(8,16)], 2)
+    #print(ds.shape)
     
     # train, validation, and test dataset percentages
     train_percent = 70
@@ -189,7 +191,7 @@ def read_data_sets(directory = "../data/ann_dataset_10points"):
     Valid outputs are: 8:n 
     """
     first_outs_index = 8 # First index of the outputs
-    max_outs_index = ds.shape[2] + 1 # Find the last index for the outputs
+    max_outs_index = ds.shape[2] + 1 # Find the last index of the outputs
     outputs_num = max_outs_index - 1 - first_outs_index # Number of outputs for reshaping
     first_inps_index = 1
     max_inps_index = 7
