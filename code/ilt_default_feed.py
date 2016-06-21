@@ -90,7 +90,7 @@ def train():
         optimizer = tf.train.AdamOptimizer(learning_rate)
         outputs = ilt.inference(x_normalized)
         loss = ilt.loss(outputs, y_)
-        #tf.scalar_summary('MSE', loss)
+        tf.scalar_summary('MSE', loss)
         #tf.scalar_summary('CC',tf.get_collection('cc')[0])
 
 
