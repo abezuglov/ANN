@@ -45,17 +45,10 @@ def loss(nn_outputs, true_outputs):
     true_outputs -- tensor representing true (training) outputs
     MSE -- Mean Squared Error (MSE), i.e. the losses tensor
     """
-    prediction_diff = nn_outputs-true_outputs
-    MSE = tf.cast(tf.reduce_mean(tf.reduce_mean(tf.square(-prediction_diff))),tf.float32)
-
-    a = tf.reduce_mean(tf.mul(tf.sub(nn_outputs,tf.reduce_mean(nn_outputs)),tf.sub(true_outputs,tf.reduce_mean(true_outputs))))
-    b1 = tf.sqrt(tf.reduce_mean(tf.square(tf.sub(nn_outputs, tf.reduce_mean(nn_outputs)))))
-    b2 = tf.sqrt(tf.reduce_mean(tf.square(tf.sub(true_outputs, tf.reduce_mean(true_outputs)))))
-    cc = tf.div(a,tf.mul(b1,b2))
+    MSE = tf.reduce_mean(tf.nn.l2_loss(nn_outputs-true_outputs))
 
     # Save MSE to the collection 
     tf.add_to_collection('losses',MSE)
-    tf.add_to_collection('cc',cc)
 
     return MSE
     
