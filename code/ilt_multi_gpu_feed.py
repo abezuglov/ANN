@@ -6,7 +6,7 @@ import time
 import tensorflow as tf
 import load_datasets as ld
 import datetime as dt
-import ilt_density as ilt
+import ilt_two_layers as ilt
 from sklearn.metrics import mean_squared_error
 
 flags = tf.app.flags
@@ -143,7 +143,6 @@ def train():
             FLAGS.learning_rate_decay, staircase=False)        
 
         # create a standard gradient descent optimizer
-        #optimizer = tf.train.GradientDescentOptimizer(learning_rate)
         optimizer = tf.train.AdamOptimizer(learning_rate)
 
         # tower_grads -- list of gradients (list of list of tuples like (grad1, var1))
