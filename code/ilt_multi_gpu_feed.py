@@ -6,8 +6,9 @@ import time
 import tensorflow as tf
 import load_datasets as ld
 import datetime as dt
-import ilt_two_layers as ilt
+import ilt_one_layer as ilt
 from sklearn.metrics import mean_squared_error
+import tensorflow.python.client
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -133,7 +134,8 @@ def train():
                                 initializer = tf.convert_to_tensor(train_dataset.stds))
 
         # Normalize input data
-        x_normalized = tf.div(tf.sub(x,means),stds)
+        #x_normalized = tf.div(tf.sub(x,means),stds)
+        x_normalized = x
 
         global_step = tf.get_variable(
             'global_step', [], 
@@ -156,7 +158,7 @@ def train():
                     # Make sure that the vars are reused for the next tower
                     tf.get_variable_scope().reuse_variables()
 
-                    summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
+                    #summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
                     
                     # calculate the gradients and add them to the list
                     grads = optimizer.compute_gradients(loss)
@@ -165,7 +167,7 @@ def train():
         # Add this here in case we need to get outputs after training is complete
         outputs = ilt.inference(x_normalized)
 
-        summaries.append(tf.scalar_summary('MSE',loss))
+        #summaries.append(tf.scalar_summary('MSE',loss))
 
         # calculate average gradients
         grads = average_gradients(tower_grads)
@@ -182,13 +184,13 @@ def train():
         #for var in tf.trainable_variables():
         #    summaries.append(tf.histogram_summary(var.op.name, var))
 
-        variable_averages = tf.train.ExponentialMovingAverage(
-            FLAGS.moving_avg_decay, global_step)
-        variables_averages_op = variable_averages.apply(tf.trainable_variables())
-        train_op = tf.group(apply_gradient_op, variables_averages_op)
-        #train_op = apply_gradient_op
+        #variable_averages = tf.train.ExponentialMovingAverage(
+        #    FLAGS.moving_avg_decay, global_step)
+        #variables_averages_op = variable_averages.apply(tf.trainable_variables())
+        #train_op = tf.group(apply_gradient_op, variables_averages_op)
+        train_op = apply_gradient_op
 
-        merged = tf.merge_all_summaries()
+        #merged = tf.merge_all_summaries()
            
         init = tf.initialize_all_variables()
         sess = tf.Session(config = tf.ConfigProto(
@@ -213,10 +215,16 @@ def train():
             start_time = time.time()
             # regular training
             feed_dict = fill_feed_dict(train_dataset, x, y_, train = True)
-                
-            _, train_loss, summary, lr = sess.run([train_op, loss, merged, learning_rate], feed_dict=feed_dict)
+            #_, train_loss, summary, lr = sess.run([train_op, loss, merged, learning_rate], feed_dict=feed_dict)
+            _, train_loss, lr = sess.run([train_op, loss, learning_rate], feed_dict=feed_dict)
+                                         #options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE),
+                                         #run_metadata = run_metadata)
+
             duration = time.time()-start_time
-            train_writer.add_summary(summary,step)
+            if step%100 == 0:
+                print("trains/sec: %.8f"%(1.0/duration))
+            #train_writer.add_summary(summary,step)
+            """
             if step%(FLAGS.max_steps//20) == 0:
                 # check model fit
                 feed_dict = fill_feed_dict(valid_dataset, x, y_, train = False)
@@ -225,7 +233,7 @@ def train():
                 duration = time.time()-start_time
                 print('Step %d (%.2f op/sec): Training loss: %.5f, Validation loss: %.5f' % (
                     step, 1.0/duration, np.float32(train_loss).item(), np.float32(valid_loss).item()))
-
+            """
         checkpoint_path = os.path.join(FLAGS.checkpoints_dir,'model.ckpt')
         saver.save(sess, checkpoint_path, global_step=step)
             
