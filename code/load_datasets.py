@@ -3,9 +3,6 @@ import os
 import sys
 import tarfile
 import numpy as np
-#from IPython.display import display, Image
-#from scipy import ndimage
-#from sklearn.linear_model import LogisticRegression
 from six.moves.urllib.request import urlretrieve
 from six.moves import cPickle as pickle
 
@@ -57,11 +54,22 @@ def maybe_load(file_names):
 
 # Class representing datasets
 class Dataset(object):
+    """
+    The dataset is responsible for calculating moments and delivering data in patches
+    the input data is normalized
+    """
     def __init__(self,
                  inputs,
                  outputs,
                  means = None,
-                 stds = None):
+                 stds = None,
+                 normalize_inputs = True):
+        """
+        Class initialization
+        inputs, outputs -- ndarrays with input and output data
+        means, stds -- provided means and std's for input data
+        normalize_inputs -- the input data will be normalized in the constructor
+        """
         self._inputs = inputs
         self._outputs = outputs
         if means is None:
@@ -71,6 +79,9 @@ class Dataset(object):
             print("using provided means, stds for dataset with %d samples"%inputs.shape[0])
             self._means = means
             self._stds = stds
+        if normalize_inputs:
+            print("normalizing inputs")
+            self._inputs = (self._inputs-self._means)/self._stds
         self._epochs_completed = 0
         self._index_in_epoch = 0
         self._num_examples = inputs.shape[0]
@@ -135,12 +146,6 @@ class Dataset(object):
         """
         return self._inputs, self.outputs
 
-def normalize(x, means, stds):
-    """
-    Reshape the data and normalize
-    """
-    return (x-means)/stds
-
 #def read_data_sets(url_from = 'http://mrtee.europa.renci.org/~bblanton/ANN/', 
 #                   to = "../data", 
 #                   file_name = 'ann_dataset1.tar',
@@ -156,9 +161,6 @@ def read_data_sets(directory = "../data/ann_dataset_10points"):
         if os.path.isdir(directory)]
 
     ds = maybe_load(file_names)
-    #print(ds.shape)
-    #ds = np.delete(ds, [range(8,16)], 2)
-    #print(ds.shape)
     
     # train, validation, and test dataset percentages
     train_percent = 70

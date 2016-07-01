@@ -11,7 +11,7 @@ flags = tf.app.flags
 FLAGS = flags.FLAGS
 
 flags.DEFINE_integer('hidden1', 8, 'Size of the first hidden layer')
-flags.DEFINE_integer('output_vars', 2, 'Size of the output layer')
+flags.DEFINE_integer('output_vars', 10, 'Size of the output layer')
 flags.DEFINE_integer('input_vars', 6, 'Size of the input layer')
 
 # Learning rate is important for model training. 

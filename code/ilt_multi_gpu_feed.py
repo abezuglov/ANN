@@ -24,10 +24,6 @@ flags.DEFINE_string('tower_name','ivy','Tower names')
 # Large batch sizes produce more accurate update gradients, but the training is slower
 flags.DEFINE_integer('batch_size', 64*193, 'Batch size. Divides evenly into the dataset size of 193')
 
-# Not currently used. The data is loaded in load_datasets (ld) and put in Dataset objects:
-# train_dataset, valid_dataset, and test_dataset
-#flags.DEFINE_string('train_dir', './data/', 'Directory to put the training data')
-
 # Save models in this directory
 flags.DEFINE_string('checkpoints_dir', './checkpoints', 'Directory to store checkpoints')
 
@@ -124,7 +120,7 @@ def train():
     with tf.Graph().as_default(), tf.device('/cpu:0'):
 
         # Prepare placeholders for inputs and expected outputs
-        x = tf.placeholder(tf.float32, [None, FLAGS.input_vars], name='x-input')
+        x = tf.placeholder(tf.float32, [None, FLAGS.input_vars], name='x-input') # Note: these are normalized inputs
         y_ = tf.placeholder(tf.float32, [None, FLAGS.output_vars], name = 'y-input')
 
         # Create variables for input data moments and initialize them with train datasets' moments
@@ -132,10 +128,6 @@ def train():
                                 initializer = tf.convert_to_tensor(train_dataset.means))
         stds = tf.get_variable('stds', trainable = False, 
                                 initializer = tf.convert_to_tensor(train_dataset.stds))
-
-        # Normalize input data
-        #x_normalized = tf.div(tf.sub(x,means),stds)
-        x_normalized = x
 
         global_step = tf.get_variable(
             'global_step', [], 
@@ -153,7 +145,7 @@ def train():
             with tf.device('/gpu:%d'%i): # make sure TF runs the code on the GPU:%d tower
                 with tf.name_scope('%s_%d' % (FLAGS.tower_name, i)) as scope:
                     # Construct the entire ANN, but share the vars across the towers
-                    loss = tower_loss(x_normalized, y_, scope)
+                    loss = tower_loss(x, y_, scope)
                    
                     # Make sure that the vars are reused for the next tower
                     tf.get_variable_scope().reuse_variables()
@@ -165,7 +157,7 @@ def train():
                     tower_grads.append(grads)
 
         # Add this here in case we need to get outputs after training is complete
-        outputs = ilt.inference(x_normalized)
+        outputs = ilt.inference(x)
 
         #summaries.append(tf.scalar_summary('MSE',loss))
 
@@ -180,15 +172,11 @@ def train():
         # apply the gradients to the model
         apply_gradient_op = optimizer.apply_gradients(grads, global_step = global_step)
 
-        # you wanna run the code slower?
-        #for var in tf.trainable_variables():
-        #    summaries.append(tf.histogram_summary(var.op.name, var))
-
-        #variable_averages = tf.train.ExponentialMovingAverage(
-        #    FLAGS.moving_avg_decay, global_step)
-        #variables_averages_op = variable_averages.apply(tf.trainable_variables())
-        #train_op = tf.group(apply_gradient_op, variables_averages_op)
-        train_op = apply_gradient_op
+        variable_averages = tf.train.ExponentialMovingAverage(
+            FLAGS.moving_avg_decay, global_step)
+        variables_averages_op = variable_averages.apply(tf.trainable_variables())
+        train_op = tf.group(apply_gradient_op, variables_averages_op)
+        #train_op = apply_gradient_op
 
         #merged = tf.merge_all_summaries()
            
@@ -197,9 +185,9 @@ def train():
             allow_soft_placement = True, # allows to utilize GPU's & CPU's
             log_device_placement = False)) # shows GPU/CPU allocation
         # Prepare folders for saving models and its stats
-        date_time_stamp = dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        train_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/train/'+date_time_stamp) #,sess.graph)
-        test_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/validation/'+date_time_stamp)
+        #date_time_stamp = dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        #train_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/train/'+date_time_stamp) #,sess.graph)
+        #test_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/validation/'+date_time_stamp)
         saver = tf.train.Saver(tf.all_variables())
 
         # Below is the code for running graph
@@ -217,23 +205,19 @@ def train():
             feed_dict = fill_feed_dict(train_dataset, x, y_, train = True)
             #_, train_loss, summary, lr = sess.run([train_op, loss, merged, learning_rate], feed_dict=feed_dict)
             _, train_loss, lr = sess.run([train_op, loss, learning_rate], feed_dict=feed_dict)
-                                         #options=tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE),
-                                         #run_metadata = run_metadata)
 
             duration = time.time()-start_time
-            if step%100 == 0:
-                print("trains/sec: %.8f"%(1.0/duration))
             #train_writer.add_summary(summary,step)
-            """
+            
             if step%(FLAGS.max_steps//20) == 0:
                 # check model fit
                 feed_dict = fill_feed_dict(valid_dataset, x, y_, train = False)
-                valid_loss, summary = sess.run([loss, merged], feed_dict = feed_dict)
-                test_writer.add_summary(summary,step)
-                duration = time.time()-start_time
+                #valid_loss, summary = sess.run([loss, merged], feed_dict = feed_dict)
+                valid_loss = sess.run(loss, feed_dict = feed_dict)
+                #test_writer.add_summary(summary,step)
                 print('Step %d (%.2f op/sec): Training loss: %.5f, Validation loss: %.5f' % (
                     step, 1.0/duration, np.float32(train_loss).item(), np.float32(valid_loss).item()))
-            """
+        
         checkpoint_path = os.path.join(FLAGS.checkpoints_dir,'model.ckpt')
         saver.save(sess, checkpoint_path, global_step=step)
             
@@ -267,6 +251,7 @@ def run():
         stds = tf.get_variable('stds', shape=[FLAGS.input_vars], trainable = False)
 
         # Normalize input data
+        # Here, the data is not normalized, so normalize it using save models' moments before running
         x_normalized = tf.div(tf.sub(x,means),stds)
 
         outputs = ilt.inference(x_normalized)
