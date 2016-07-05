@@ -88,8 +88,6 @@ def train():
         outputs = ilt.inference(x)
         loss = ilt.loss(outputs, y_)
         #tf.scalar_summary('MSE', loss)
-        #tf.scalar_summary('CC',tf.get_collection('cc')[0])
-
 
         # Calculate gradients and apply them
         grads = optimizer.compute_gradients(loss)
