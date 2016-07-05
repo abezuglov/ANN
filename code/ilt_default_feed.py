@@ -75,6 +75,9 @@ def train():
         stds = tf.get_variable('stds', trainable = False, 
                                 initializer = tf.convert_to_tensor(train_dataset.stds))
 
+        # Normalize input data
+        #x_normalized = tf.div(tf.sub(x,means),stds)
+
         # Prepare global step and learning rate for optimization
         global_step = tf.get_variable(
             'global_step', [], 
@@ -85,7 +88,10 @@ def train():
 
         # Create ADAM optimizer
         optimizer = tf.train.AdamOptimizer(learning_rate)
+
         outputs = ilt.inference(x)
+        #outputs = ilt.inference(x_normalized)
+
         loss = ilt.loss(outputs, y_)
         #tf.scalar_summary('MSE', loss)
 
@@ -119,7 +125,8 @@ def train():
 
         valid_loss = 1.0
         train_loss = 1.0
-        step = 1
+	train_losses = 0
+	num_steps = 0
         # Main training loop
         for step in xrange(FLAGS.max_steps):
             start_time = time.time()
@@ -129,7 +136,13 @@ def train():
             _, train_loss, lr = sess.run([train_op, loss, learning_rate], feed_dict=fill_feed_dict(train_dataset, x, y_, train = True))
 
             duration = time.time()-start_time
+
+            train_losses += train_loss
+	    num_steps += 1
+
             #train_writer.add_summary(summary,step)
+            train_writer.add_summary(summary,step)
+
             if step%(FLAGS.max_steps//20) == 0:
                 # check model fit
                 feed_dict = fill_feed_dict(valid_dataset, x, y_, train = False)
@@ -137,7 +150,9 @@ def train():
                 valid_loss = sess.run(loss, feed_dict = feed_dict)
                 #test_writer.add_summary(summary,step)
                 print('Step %d (%.2f op/sec): Training MSE: %.5f, Validation MSE: %.5f' % (
-                    step, 1.0/duration, np.float32(train_loss).item(), np.float32(valid_loss).item()))
+                    step, 1.0/duration, np.float32(train_losses/num_steps).item(), np.float32(valid_loss).item()))
+		train_losses = 0
+		num_steps = 0
 
         checkpoint_path = os.path.join(FLAGS.checkpoints_dir,'model.ckpt')
         saver.save(sess, checkpoint_path, global_step=step)

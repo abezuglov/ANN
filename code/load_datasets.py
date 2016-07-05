@@ -63,7 +63,7 @@ class Dataset(object):
                  outputs,
                  means = None,
                  stds = None,
-                 normalize_inputs = True):
+                 normalize_data = True):
         """
         Class initialization
         inputs, outputs -- ndarrays with input and output data
@@ -72,6 +72,10 @@ class Dataset(object):
         """
         self._inputs = inputs
         self._outputs = outputs
+        self._epochs_completed = 0
+        self._index_in_epoch = 0
+        self._num_examples = inputs.shape[0]
+
         if means is None:
             print("calculate new means, stds for dataset with %d samples"%inputs.shape[0])
             self._means, self._stds = self.calc_moments()
@@ -79,12 +83,9 @@ class Dataset(object):
             print("using provided means, stds for dataset with %d samples"%inputs.shape[0])
             self._means = means
             self._stds = stds
-        if normalize_inputs:
-            print("normalizing inputs")
-            self._inputs = (self._inputs-self._means)/self._stds
-        self._epochs_completed = 0
-        self._index_in_epoch = 0
-        self._num_examples = inputs.shape[0]
+	if normalize_data:
+		self._inputs = (self._inputs - self._means)/self._stds
+
 
     @property
     def inputs(self):
