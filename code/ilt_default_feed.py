@@ -6,7 +6,7 @@ import time
 import tensorflow as tf
 import load_datasets as ld
 import datetime as dt
-import ilt_one_layer as ilt
+import ilt_two_layers as ilt
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -16,7 +16,7 @@ flags.DEFINE_boolean('train', True, 'When True, run training & save model. When 
 # Split the training data into batches. Each hurricane is 193 records. Batch sizes are usually 2^k
 # When batch size equals to 0, or exceeds available data, use the whole dataset
 # Large batch sizes produce more accurate update gradients, but the training is slower
-flags.DEFINE_integer('batch_size', 64*193, 'Batch size. Divides evenly into the dataset size of 193')
+flags.DEFINE_integer('batch_size', 32*193, 'Batch size. Divides evenly into the dataset size of 193')
 
 # Not currently used. The data is loaded in load_datasets (ld) and put in Dataset objects:
 # train_dataset, valid_dataset, and test_dataset
@@ -141,7 +141,7 @@ def train():
 	    num_steps += 1
 
             #train_writer.add_summary(summary,step)
-            train_writer.add_summary(summary,step)
+            #train_writer.add_summary(summary,step)
 
             if step%(FLAGS.max_steps//20) == 0:
                 # check model fit
