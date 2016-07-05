@@ -90,8 +90,9 @@ def train():
         #tf.scalar_summary('MSE', loss)
 
         # Calculate gradients and apply them
-        grads = optimizer.compute_gradients(loss)
-        apply_gradient_op = optimizer.apply_gradients(grads, global_step = global_step)
+        grads, v = zip(*optimizer.compute_gradients(loss))
+        grads, _ = tf.clip_by_global_norm(grads, 1.25)
+        apply_gradient_op = optimizer.apply_gradients(zip(grads,v), global_step = global_step)
 
         # Smoothen variables after gradient applications
         variable_averages = tf.train.ExponentialMovingAverage(

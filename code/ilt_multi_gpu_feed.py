@@ -161,22 +161,21 @@ def train():
 
         #summaries.append(tf.scalar_summary('MSE',loss))
 
-        # calculate average gradients
-        grads = average_gradients(tower_grads)
+        # calculate average gradients & apply gradients to the model
+        grads, v = zip(*average_gradients(tower_grads))
+        grads, _ = tf.clip_by_global_norm(grads, 1.25)
+        apply_gradient_op = optimizer.apply_gradients(zip(grads,v), global_step = global_step)
 
         #for grad, var in grads:
             #if grad is not None:
             #summaries.append(tf.histogram_summary(var.op.name+'/gradients', grad))
             #summaries.append(tf.scalar_summary(var.op.name+'/sparsity',tf.nn.zero_fraction(var)))
 
-        # apply the gradients to the model
-        apply_gradient_op = optimizer.apply_gradients(grads, global_step = global_step)
-
         variable_averages = tf.train.ExponentialMovingAverage(
             FLAGS.moving_avg_decay, global_step)
         variables_averages_op = variable_averages.apply(tf.trainable_variables())
         train_op = tf.group(apply_gradient_op, variables_averages_op)
-        #train_op = apply_gradient_op
+        train_op = apply_gradient_op
 
         #merged = tf.merge_all_summaries()
            
