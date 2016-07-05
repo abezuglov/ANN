@@ -10,16 +10,16 @@ import ilt_aux_model as aux
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_integer('hidden1', 8, 'Size of the first hidden layer')
-flags.DEFINE_integer('output_vars', 2, 'Size of the output layer')
+flags.DEFINE_integer('hidden1', 80, 'Size of the first hidden layer')
+flags.DEFINE_integer('output_vars', 10, 'Size of the output layer')
 flags.DEFINE_integer('input_vars', 6, 'Size of the input layer')
 
 # Learning rate is important for model training. 
 # Decrease learning rate for more complicated models.
 # Increase if convergence is steady but too slow
-flags.DEFINE_float('learning_rate', 0.05, 'Initial learning rate')
+flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate')
 flags.DEFINE_float('learning_rate_decay', 0.5, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
-flags.DEFINE_integer('max_steps', 500, 'Number of steps to run trainer')
+flags.DEFINE_integer('max_steps', 10000, 'Number of steps to run trainer')
 flags.DEFINE_float('max_loss', 0.01, 'Max acceptable validation MSE')
 flags.DEFINE_float('moving_avg_decay', 0.999, 'Moving average decay for training variables')
 

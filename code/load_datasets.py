@@ -61,7 +61,8 @@ class Dataset(object):
                  inputs,
                  outputs,
                  means = None,
-                 stds = None):
+                 stds = None,
+		 normalize_data = True):
         self._inputs = inputs
         self._outputs = outputs
         if means is None:
@@ -71,6 +72,8 @@ class Dataset(object):
             print("using provided means, stds for dataset with %d samples"%inputs.shape[0])
             self._means = means
             self._stds = stds
+	if normalize_data:
+		self._inputs = (self._inputs - self._means)/self._stds
         self._epochs_completed = 0
         self._index_in_epoch = 0
         self._num_examples = inputs.shape[0]

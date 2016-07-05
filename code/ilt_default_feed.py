@@ -6,7 +6,7 @@ import time
 import tensorflow as tf
 import load_datasets as ld
 import datetime as dt
-import ilt_density as ilt
+import ilt_one_layer as ilt
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -76,7 +76,7 @@ def train():
                                 initializer = tf.convert_to_tensor(train_dataset.stds))
 
         # Normalize input data
-        x_normalized = tf.div(tf.sub(x,means),stds)
+        #x_normalized = tf.div(tf.sub(x,means),stds)
 
         # Prepare global step and learning rate for optimization
         global_step = tf.get_variable(
@@ -88,7 +88,8 @@ def train():
 
         # Create ADAM optimizer
         optimizer = tf.train.AdamOptimizer(learning_rate)
-        outputs = ilt.inference(x_normalized)
+        #outputs = ilt.inference(x_normalized)
+	outputs = ilt.inference(x)
         loss = ilt.loss(outputs, y_)
         tf.scalar_summary('MSE', loss)
         #tf.scalar_summary('CC',tf.get_collection('cc')[0])
@@ -123,7 +124,8 @@ def train():
 
         valid_loss = 1.0
         train_loss = 1.0
-        step = 1
+	train_losses = 0
+	num_steps = 0
         # Main training loop
         for step in xrange(FLAGS.max_steps):
             start_time = time.time()
@@ -132,7 +134,11 @@ def train():
             _, train_loss, summary, lr = sess.run(
                 [train_op, loss, merged, learning_rate], feed_dict=fill_feed_dict(train_dataset, x, y_, train = True))
 
+            train_losses += train_loss
+	    num_steps += 1
+
             duration = time.time()-start_time
+		
             train_writer.add_summary(summary,step)
             if step%(FLAGS.max_steps//20) == 0:
                 # check model fit
@@ -140,7 +146,9 @@ def train():
                 valid_loss, summary = sess.run([loss, merged], feed_dict = feed_dict)
                 test_writer.add_summary(summary,step)
                 print('Step %d (%.2f op/sec): Training MSE: %.5f, Validation MSE: %.5f' % (
-                    step, 1.0/duration, np.float32(train_loss).item(), np.float32(valid_loss).item()))
+                    step, 1.0/duration, np.float32(train_losses/num_steps).item(), np.float32(valid_loss).item()))
+		train_losses = 0
+		num_steps = 0
 
         checkpoint_path = os.path.join(FLAGS.checkpoints_dir,'model.ckpt')
         saver.save(sess, checkpoint_path, global_step=step)
