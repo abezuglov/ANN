@@ -219,6 +219,8 @@ def train():
                 #test_writer.add_summary(summary,step)
                 print('Step %d (%.2f op/sec): Training loss: %.5f, Validation loss: %.5f' % (
                     step, 1.0/duration, np.float32(train_losses/num_steps).item(), np.float32(valid_loss).item()))
+                train_losses = 0
+		num_steps = 0
         
         checkpoint_path = os.path.join(FLAGS.checkpoints_dir,'model.ckpt')
         saver.save(sess, checkpoint_path, global_step=step)
