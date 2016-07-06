@@ -72,7 +72,7 @@ class Dataset(object):
         """
         self._inputs = inputs
         self._outputs = outputs
-        self._epochs_completed = 0
+        #self._epochs_completed = 0
         self._index_in_epoch = 0
         self._num_examples = inputs.shape[0]
 
@@ -99,9 +99,9 @@ class Dataset(object):
     def num_examples(self):
         return self._num_examples
 
-    @property
-    def epochs_completed(self):
-        return self._epochs_completed
+    #@property
+    #def epochs_completed(self):
+    #    return self._epochs_completed
 
     @property
     def means(self):
@@ -123,33 +123,24 @@ class Dataset(object):
         stds = [np.std(self.inputs[:,i]) for i in range(self.inputs.shape[1])]
         return means, stds
 
-    """
-    def next_batch(self, batch_size = 0):
-        if batch_size > 0 and batch_size <= self._num_examples:
-            start = self._index_in_epoch
-            self._index_in_epoch += batch_size
-            if self._index_in_epoch > self._num_examples:
-                self._epochs_completed += 1
-                start = 0
-                self._index_in_epoch = batch_size
-                assert batch_size <= self._num_examples
-            end = self._index_in_epoch
-            return self._inputs[start:end], self.outputs[start:end]
-        else:
-            return self._inputs, self.outputs
-    """
     def next_batch(self, batch_size = 0):
         """
         Returns the next batch of data of size batch_size. If batch_size is not specified or larger than the dataset,
         the whole dataset is returned. 
+	When the dataset is not divisible into batches, the last batch will be smaller
         """
         if batch_size > 0 and batch_size <= self._num_examples:
-            start = np.random.randint(0,self._num_examples-batch_size+1)
+	    start = self._index_in_epoch
 	    end = start + batch_size
+	    self._index_in_epoch = end
+	    if end >= self._num_examples:
+		# technically, if end == _num_examples, it is still a "valid" data sample consisting
+		# of a single record. However, it is ignored
+		end = self._num_examples
+		self._index_in_epoch = 0
             return self._inputs[start:end], self.outputs[start:end]
         else:
             return self._inputs, self.outputs
-
 
     def get_full(self):
         """
