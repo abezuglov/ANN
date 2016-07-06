@@ -123,11 +123,8 @@ class Dataset(object):
         stds = [np.std(self.inputs[:,i]) for i in range(self.inputs.shape[1])]
         return means, stds
 
+"""
     def next_batch(self, batch_size = 0):
-        """
-        Returns the next batch of data of size batch_size. If batch_size is not specified or larger than the dataset,
-        the whole dataset is returned. 
-        """
         if batch_size > 0 and batch_size <= self._num_examples:
             start = self._index_in_epoch
             self._index_in_epoch += batch_size
@@ -140,6 +137,19 @@ class Dataset(object):
             return self._inputs[start:end], self.outputs[start:end]
         else:
             return self._inputs, self.outputs
+"""
+    def next_batch(self, batch_size = 0):
+        """
+        Returns the next batch of data of size batch_size. If batch_size is not specified or larger than the dataset,
+        the whole dataset is returned. 
+        """
+        if batch_size > 0 and batch_size <= self._num_examples:
+            start = np.random.randint(0,self._num_examples-batch_size+1)
+	    end = start + batch_size
+            return self._inputs[start:end], self.outputs[start:end]
+        else:
+            return self._inputs, self.outputs
+
 
     def get_full(self):
         """
