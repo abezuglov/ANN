@@ -7,6 +7,7 @@ import tensorflow as tf
 import load_datasets as ld
 import datetime as dt
 import ilt_two_layers as ilt
+from sklearn.metrics import mean_squared_error
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -156,17 +157,19 @@ def train():
 
         checkpoint_path = os.path.join(FLAGS.checkpoints_dir,'model.ckpt')
         saver.save(sess, checkpoint_path, global_step=step)
-            
+
+        print("Training summary: ")
         feed_dict = fill_feed_dict(test_dataset, x, y_, train = False)
         test_loss = sess.run([loss], feed_dict = feed_dict)
         print('Test MSE: %.5f' % (np.float32(test_loss).item()))
 
-        print("Correlation coefficients: ")
         outs = outputs.eval(session=sess, feed_dict = feed_dict)
 
-        for out_no in range(0,10):
-            print("CC at point %d: %.4f"%(
-                out_no,np.corrcoef(outs[:,out_no], test_dataset.outputs[:,out_no])[0,1]))
+        for out_no in range(0,FLAGS.output_vars):
+            print("Location %d: CC: %.4f, MSE: %.6f"%(
+                out_no,
+                np.corrcoef(outs[:,out_no], test_dataset.outputs[:,out_no])[0,1],
+                  mean_squared_error(outs[:,out_no], test_dataset.outputs[:,out_no])))
 
         sess.close()
 

@@ -6,7 +6,7 @@ import time
 import tensorflow as tf
 import load_datasets as ld
 import datetime as dt
-import ilt_one_layer as ilt
+import ilt_two_layers as ilt
 from sklearn.metrics import mean_squared_error
 import tensorflow.python.client
 
@@ -22,7 +22,7 @@ flags.DEFINE_string('tower_name','ivy','Tower names')
 # Split the training data into batches. Each hurricane is 193 records. Batch sizes are usually 2^k
 # When batch size equals to 0, or exceeds available data, use the whole dataset
 # Large batch sizes produce more accurate update gradients, but the training is slower
-flags.DEFINE_integer('batch_size', 64*193, 'Batch size. Divides evenly into the dataset size of 193')
+flags.DEFINE_integer('batch_size', 19*193, 'Batch size. Divides evenly into the dataset size of 193')
 
 # Save models in this directory
 flags.DEFINE_string('checkpoints_dir', './checkpoints', 'Directory to store checkpoints')
@@ -196,7 +196,8 @@ def train():
 
         valid_loss = 1.0
         train_loss = 1.0
-        step = 1
+	train_losses = 0
+	num_steps = 0
         # Main training loop
         for step in xrange(FLAGS.max_steps):
             start_time = time.time()
@@ -207,6 +208,8 @@ def train():
 
             duration = time.time()-start_time
             #train_writer.add_summary(summary,step)
+	    train_losses += train_loss
+	    num_steps += 1
             
             if step%(FLAGS.max_steps//20) == 0:
                 # check model fit
@@ -215,16 +218,16 @@ def train():
                 valid_loss = sess.run(loss, feed_dict = feed_dict)
                 #test_writer.add_summary(summary,step)
                 print('Step %d (%.2f op/sec): Training loss: %.5f, Validation loss: %.5f' % (
-                    step, 1.0/duration, np.float32(train_loss).item(), np.float32(valid_loss).item()))
+                    step, 1.0/duration, np.float32(train_losses/num_steps).item(), np.float32(valid_loss).item()))
         
         checkpoint_path = os.path.join(FLAGS.checkpoints_dir,'model.ckpt')
         saver.save(sess, checkpoint_path, global_step=step)
-            
+
+        print("Training summary: ")
         feed_dict = fill_feed_dict(test_dataset, x, y_, train = False)
         test_loss = sess.run([loss], feed_dict = feed_dict)
         print('Test MSE: %.5f' % (np.float32(test_loss).item()))
 
-        print("Correlation coefficients: ")
         outs = outputs.eval(session=sess, feed_dict = feed_dict)
 
         for out_no in range(0,FLAGS.output_vars):
