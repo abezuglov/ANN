@@ -174,17 +174,32 @@ def read_data_sets(directory = "../data/ann_dataset_10points"):
     ds = maybe_load(file_names)
     
     # train, validation, and test dataset percentages
-    train_percent = 70
-    valid_percent = 15
-    test_percent = 15
+    # Not currently used. The start/stop indices are hard-coded
+    #train_percent = 70
+    #valid_percent = 15
+    #test_percent = 15
 
     # train, validation, and test dataset indices
     # test: test_start : valid_start-1
     # validation: valid_start : train_start-1
     # training: train_start : dataset.shape[0]
-    test_start = 0 
-    valid_start = int(test_percent/100.0*ds.shape[0])
-    train_start = int((test_percent+valid_percent)/100.0*ds.shape[0])
+    #test_start = 0 
+    #valid_start = int(test_percent/100.0*ds.shape[0])
+    #train_start = int((test_percent+valid_percent)/100.0*ds.shape[0])
+
+    
+    # Option 1: Training dataset contains 228 samples (batches: 19,57,114, and 228)
+    # test: 48, validation: 48, training: 228
+    test_start = 0
+    valid_start = 48
+    train_start = 48+48
+    """
+    # Option 2: Training dataset contains 225 samples (batches: 3,5,9,15,45, and 225)
+    # test: 50, validation: 49, training: 225
+    test_start = 0
+    valid_start = 50
+    train_start = 50+49
+    """
 
     # Shuffle file indices
     file_indices = range(ds.shape[0])
