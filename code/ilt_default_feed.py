@@ -81,8 +81,31 @@ def train():
                                 initializer = tf.convert_to_tensor(train_dataset.output_moments[1]))
 
 	#===================================================
+	# Calculate losses for training and other ANN parameters for reporting
+	# 
+	#===================================================
+        norm_outputs = ilt.inference(x) # these are normalized, 'non-true' outputs
+	outputs = tf.add(tf.mul(norm_outputs, output_stds), output_means) # denormalized, true outputs
+        #loss = ilt.loss(norm_outputs, y_)
+
+	# calculate correlation coefficients on normalized data (should be identical to true values)
+	diff_1 = tf.sub(norm_outputs,tf.reduce_mean(norm_outputs))
+	diff_2 = tf.sub(y_,tf.reduce_mean(y_))
+	nom = tf.reduce_sum(tf.mul(diff_1,diff_2),0)
+	denom = tf.mul(tf.sqrt(tf.reduce_sum(tf.square(diff_1),0)),tf.sqrt(tf.reduce_sum(tf.square(diff_2),0)))
+	cc = tf.div(nom,denom)
+	avg_cc = tf.reduce_mean(cc)
+	loss = 1-avg_cc
+
+
+	mse_loss = tf.mul(loss, tf.square(output_stds)) # individual true mse's
+	mse_loss_avg = tf.reduce_mean(mse_loss) # average mse
+
+	#denorm_y_ = tf.add(tf.mul(y_, output_stds), output_means) # denormalized y_
+
+	#===================================================
 	# Training portion of the graph
-	# Eval train_op to perform one step training
+	# Eval train_op to perform one step training to minimize loss
 	#===================================================
         # Prepare global step and learning rate for optimization
         global_step = tf.get_variable(
@@ -95,10 +118,6 @@ def train():
 	 # Create ADAM optimizer
         optimizer = tf.train.AdamOptimizer(learning_rate)
 
-        norm_outputs = ilt.inference(x) # these are normalized, 'non-true' outputs
-
-        loss = ilt.loss(norm_outputs, y_)
-
         # Calculate gradients and apply them
         grads, v = zip(*optimizer.compute_gradients(loss))
         grads, _ = tf.clip_by_global_norm(grads, 1.25)
@@ -110,25 +129,6 @@ def train():
         variables_averages_op = variable_averages.apply(tf.trainable_variables())
         train_op = tf.group(apply_gradient_op, variables_averages_op)
         #train_op = apply_gradient_op
-
-	#===================================================
-	# Reporting portion of the graph
-	# Eval mse_loss to get MSE losses
-	# Eval outputs to get true denormalized ANN outputs
-	#===================================================
-	outputs = tf.add(tf.mul(norm_outputs, output_stds), output_means) # denormalized, true outputs
-	mse_loss = tf.mul(loss, tf.square(output_stds)) # individual true mse's
-	mse_loss_avg = tf.reduce_mean(mse_loss) # average mse
-
-	denorm_y_ = tf.add(tf.mul(y_, output_stds), output_means) # denormalized y_
-	
-	# calculate correlation coefficients
-	diff_1 = tf.sub(outputs,tf.reduce_mean(outputs))
-	diff_2 = tf.sub(y_,tf.reduce_mean(y_))
-	nom = tf.reduce_sum(tf.mul(diff_1,diff_2),0)
-	denom = tf.mul(tf.sqrt(tf.reduce_sum(tf.square(diff_1),0)),tf.sqrt(tf.reduce_sum(tf.square(diff_2),0)))
-	cc = tf.div(nom,denom)
-	avg_cc = tf.reduce_mean(cc)
 
         init = tf.initialize_all_variables()
         sess = tf.Session(config = tf.ConfigProto(
