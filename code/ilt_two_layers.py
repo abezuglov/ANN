@@ -11,8 +11,8 @@ flags = tf.app.flags
 FLAGS = flags.FLAGS
 
 # Structure of the network
-flags.DEFINE_integer('hidden1', 64, 'Size of the first hidden layer')
-flags.DEFINE_integer('hidden2', 128, 'Size of the second hidden layer')
+flags.DEFINE_integer('hidden1', 32, 'Size of the first hidden layer')
+flags.DEFINE_integer('hidden2', 64, 'Size of the second hidden layer')
 flags.DEFINE_integer('output_vars', 10, 'Size of the output layer')
 flags.DEFINE_integer('input_vars', 6, 'Size of the input layer')
 
@@ -21,7 +21,7 @@ flags.DEFINE_integer('input_vars', 6, 'Size of the input layer')
 # Increase if convergence is steady but too slow
 flags.DEFINE_float('learning_rate', 0.005, 'Initial learning rate')
 flags.DEFINE_float('learning_rate_decay', 0.5, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
-flags.DEFINE_integer('max_steps', 10001, 'Number of steps to run trainer')
+flags.DEFINE_integer('max_steps', 15001, 'Number of steps to run trainer')
 flags.DEFINE_float('moving_avg_decay', 0.999, 'Moving average decay for training variables')
 
 def inference(inputs):

@@ -61,8 +61,8 @@ class Dataset(object):
     def __init__(self,
                  inputs,
                  outputs,
-                 means = None,
-                 stds = None,
+                 input_moments = None,
+		 output_moments = None,
                  normalize_data = True):
         """
         Class initialization
@@ -72,19 +72,28 @@ class Dataset(object):
         """
         self._inputs = inputs
         self._outputs = outputs
-        #self._epochs_completed = 0
+
         self._index_in_epoch = 0
         self._num_examples = inputs.shape[0]
 
-        if means is None:
-            print("calculate new means, stds for dataset with %d samples"%inputs.shape[0])
-            self._means, self._stds = self.calc_moments()
+        if input_moments is None:
+            print("inputs: calculate new means, stds for dataset with %d samples"%inputs.shape[0])
+            self._input_moments = self.calc_input_moments()
         else:
-            print("using provided means, stds for dataset with %d samples"%inputs.shape[0])
-            self._means = means
-            self._stds = stds
+            print("inputs: using provided means, stds for dataset with %d samples"%inputs.shape[0])
+            self._input_moments = input_moments
+
+	if output_moments is None:
+            print("outputs: calculate new means, stds for dataset with %d samples"%outputs.shape[0])
+            self._output_moments = self.calc_output_moments()
+        else:
+            print("outputs: using provided means, stds for dataset with %d samples"%outputs.shape[0])
+            self._output_moments = output_moments
+
 	if normalize_data:
-		self._inputs = (self._inputs - self._means)/self._stds
+		print("normalizing inputs and outputs")
+		self._inputs = (self._inputs - self._input_moments[0])/self._input_moments[1]
+		self._outputs = (self._outputs - self._output_moments[0])/self._output_moments[1]
 
 
     @property
@@ -104,24 +113,32 @@ class Dataset(object):
     #    return self._epochs_completed
 
     @property
-    def means(self):
-        return self._means
+    def input_moments(self):
+        return self._input_moments
 
     @property
-    def stds(self):
-        return self._stds
+    def output_moments(self):
+        return self._output_moments
 
     @property
     def num_hurricanes(self):
         return self._num_examples//193
 
-    def calc_moments(self):
+    def calc_input_moments(self):
         """
         Calculate and return moments (mean, std)
         """
         means = [np.mean(self.inputs[:,i]) for i in range(self.inputs.shape[1])]
         stds = [np.std(self.inputs[:,i]) for i in range(self.inputs.shape[1])]
-        return means, stds
+        return (means, stds)
+
+    def calc_output_moments(self):
+        """
+        Calculate and return moments (mean, std)
+        """
+        means = [np.mean(self.outputs[:,i]) for i in range(self.outputs.shape[1])]
+        stds = [np.std(self.outputs[:,i]) for i in range(self.outputs.shape[1])]
+        return (means, stds)
 
     def next_batch(self, batch_size = 0):
         """
@@ -224,8 +241,10 @@ def read_data_sets(directory = "../data/ann_dataset_10points"):
     train_output = train_dataset[:,:,first_outs_index:max_outs_index].reshape((-1, outputs_num)).astype(np.float32)
 
     # calculate means and stds for training dataset
-    input_means = [np.mean(train_dataset2[:,i]) for i in range(train_dataset2.shape[1])]
-    input_stds = [np.std(train_dataset2[:,i]) for i in range(train_dataset2.shape[1])]
+    #input_means = [np.mean(train_dataset2[:,i]) for i in range(train_dataset2.shape[1])]
+    #input_stds = [np.std(train_dataset2[:,i]) for i in range(train_dataset2.shape[1])]
+    #output_means = [np.mean(train_output[:,i]) for i in range(train_output.shape[1])]
+    #output_stds = [np.std(train_output[:,i]) for i in range(train_output.shape[1])]
 
     valid_dataset2 = valid_dataset[:,:,first_inps_index:max_inps_index].reshape((-1, inputs_num)).astype(np.float32)
     valid_output = valid_dataset[:,:,first_outs_index:max_outs_index].reshape((-1, outputs_num)).astype(np.float32)
@@ -237,8 +256,8 @@ def read_data_sets(directory = "../data/ann_dataset_10points"):
 
     # Create validation and test datasets. The moments are added for compatibility.
     # Only training dataset moments are used.
-    valid = Dataset(valid_dataset2, valid_output, means = train.means, stds = train.stds)
-    test = Dataset(test_dataset2, test_output, means = train.means, stds = train.stds)
+    valid = Dataset(valid_dataset2, valid_output, input_moments = train.input_moments, output_moments = train.output_moments)
+    test = Dataset(test_dataset2, test_output, input_moments = train.input_moments, output_moments = train.output_moments)
 
     del(train_dataset2)
     del(train_output)

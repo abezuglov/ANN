@@ -70,31 +70,34 @@ def train():
         x = tf.placeholder(tf.float32, [None, FLAGS.input_vars], name='x-input')
         y_ = tf.placeholder(tf.float32, [None, FLAGS.output_vars], name = 'y-input')
 
-        # Create variables for input data moments and initialize them with train datasets' moments
-        means = tf.get_variable('means', trainable = False, 
-                                initializer = tf.convert_to_tensor(train_dataset.means))
-        stds = tf.get_variable('stds', trainable = False, 
-                                initializer = tf.convert_to_tensor(train_dataset.stds))
+        # Create variables for input and output data moments and initialize them with train datasets' moments
+        input_means = tf.get_variable('input_means', trainable = False, 
+                                initializer = tf.convert_to_tensor(train_dataset.input_moments[0]))
+        input_stds = tf.get_variable('input_stds', trainable = False, 
+                                initializer = tf.convert_to_tensor(train_dataset.input_moments[1]))
+        output_means = tf.get_variable('output_means', trainable = False, 
+                                initializer = tf.convert_to_tensor(train_dataset.output_moments[0]))
+	output_stds = tf.get_variable('output_stds', trainable = False, 
+                                initializer = tf.convert_to_tensor(train_dataset.output_moments[1]))
 
-        # Normalize input data
-        #x_normalized = tf.div(tf.sub(x,means),stds)
-
+	#===================================================
+	# Training portion of the graph
+	# Eval train_op to perform one step training
+	#===================================================
         # Prepare global step and learning rate for optimization
         global_step = tf.get_variable(
             'global_step', [], 
             initializer=tf.constant_initializer(0), trainable=False)
         learning_rate = tf.train.exponential_decay(
             FLAGS.learning_rate, global_step, FLAGS.max_steps,
-            FLAGS.learning_rate_decay, staircase=False)        
+            FLAGS.learning_rate_decay, staircase=False)    
 
-        # Create ADAM optimizer
+	 # Create ADAM optimizer
         optimizer = tf.train.AdamOptimizer(learning_rate)
 
-        outputs = ilt.inference(x)
-        #outputs = ilt.inference(x_normalized)
+        norm_outputs = ilt.inference(x) # these are normalized, 'non-true' outputs
 
-        loss = ilt.loss(outputs, y_)
-        #tf.scalar_summary('MSE', loss)
+        loss = ilt.loss(norm_outputs, y_)
 
         # Calculate gradients and apply them
         grads, v = zip(*optimizer.compute_gradients(loss))
@@ -108,16 +111,30 @@ def train():
         train_op = tf.group(apply_gradient_op, variables_averages_op)
         #train_op = apply_gradient_op
 
-        #merged = tf.merge_all_summaries()
-           
+	#===================================================
+	# Reporting portion of the graph
+	# Eval mse_loss to get MSE losses
+	# Eval outputs to get true denormalized ANN outputs
+	#===================================================
+	outputs = tf.add(tf.mul(norm_outputs, output_stds), output_means) # denormalized, true outputs
+	mse_loss = tf.mul(loss, tf.square(output_stds)) # individual true mse's
+	mse_loss_avg = tf.reduce_mean(mse_loss) # average mse
+
+	denorm_y_ = tf.add(tf.mul(y_, output_stds), output_means) # denormalized y_
+	
+	# calculate correlation coefficients
+	diff_1 = tf.sub(outputs,tf.reduce_mean(outputs))
+	diff_2 = tf.sub(y_,tf.reduce_mean(y_))
+	nom = tf.reduce_sum(tf.mul(diff_1,diff_2),0)
+	denom = tf.mul(tf.sqrt(tf.reduce_sum(tf.square(diff_1),0)),tf.sqrt(tf.reduce_sum(tf.square(diff_2),0)))
+	cc = tf.div(nom,denom)
+	avg_cc = tf.reduce_mean(cc)
+
         init = tf.initialize_all_variables()
         sess = tf.Session(config = tf.ConfigProto(
             allow_soft_placement = False, # allows to utilize GPU's & CPU's
             log_device_placement = False)) # shows GPU/CPU allocation
-        # Prepare folders for saving models and its stats
-        #date_time_stamp = dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        #train_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/train/'+date_time_stamp) #, sess.graph)
-        #test_writer = tf.train.SummaryWriter(FLAGS.summaries_dir+'/validation/'+date_time_stamp) #, sess.graph)
+
         saver = tf.train.Saver()
 
         # Finish graph creation. Below is the code for running graph
@@ -132,26 +149,20 @@ def train():
         for step in xrange(FLAGS.max_steps):
             start_time = time.time()
             # regular training
-            
-            #_, train_loss, summary, lr = sess.run([train_op, loss, merged, learning_rate], feed_dict=fill_feed_dict(train_dataset, x, y_, train = True))
-            _, train_loss, lr = sess.run([train_op, loss, learning_rate], feed_dict=fill_feed_dict(train_dataset, x, y_, train = True))
-
+            _, train_loss, lr = sess.run([train_op, mse_loss_avg, learning_rate], 
+				feed_dict=fill_feed_dict(train_dataset, x, y_, train = True))
             duration = time.time()-start_time
 
             train_losses += train_loss
 	    num_steps += 1
 
-            #train_writer.add_summary(summary,step)
-            #train_writer.add_summary(summary,step)
-
             if step%(FLAGS.max_steps//20) == 0:
                 # check model fit
                 feed_dict = fill_feed_dict(valid_dataset, x, y_, train = False)
-                #valid_loss, summary = sess.run([loss, merged], feed_dict = feed_dict)
-                valid_loss = sess.run(loss, feed_dict = feed_dict)
-                #test_writer.add_summary(summary,step)
-                print('Step %d (%.2f op/sec): Training MSE: %.5f, Validation MSE: %.5f' % (
-                    step, 1.0/duration, np.float32(train_losses/num_steps).item(), np.float32(valid_loss).item()))
+                valid_loss, valid_avg_cc = sess.run([mse_loss_avg,avg_cc], feed_dict = feed_dict)
+
+                print('Step %d (%.2f op/sec): Training MSE: %.5f, Validation CC: %.4f, MSE: %.5f' % (
+                    step, 1.0/duration, train_losses/num_steps, valid_avg_cc, valid_loss))
 		train_losses = 0
 		num_steps = 0
 
@@ -160,16 +171,11 @@ def train():
 
         print("Training summary: ")
         feed_dict = fill_feed_dict(test_dataset, x, y_, train = False)
-        test_loss = sess.run([loss], feed_dict = feed_dict)
-        print('Test MSE: %.5f' % (np.float32(test_loss).item()))
-
-        outs = outputs.eval(session=sess, feed_dict = feed_dict)
+        test_loss_avg, test_loss, test_cc = sess.run([mse_loss_avg, mse_loss, cc], feed_dict = feed_dict)
+        print('Test MSE: %.5f' % (np.float32(test_loss_avg).item()))
 
         for out_no in range(0,FLAGS.output_vars):
-            print("Location %d: CC: %.4f, MSE: %.6f"%(
-                out_no,
-                np.corrcoef(outs[:,out_no], test_dataset.outputs[:,out_no])[0,1],
-                  mean_squared_error(outs[:,out_no], test_dataset.outputs[:,out_no])))
+            print("Location %d: CC: %.4f, MSE: %.6f"%(out_no,test_cc[out_no],test_loss[out_no]))
 
         sess.close()
 
