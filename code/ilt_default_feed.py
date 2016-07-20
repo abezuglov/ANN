@@ -96,7 +96,7 @@ def train():
 	cc = tf.div(nom,denom)
 	avg_cc = tf.reduce_mean(cc)
 
-	mse_loss = tf.mul(loss, tf.square(output_stds)) # individual true mse's
+	mse_loss = tf.mul(tf.square(norm_outputs-y_), tf.square(output_stds)) # individual true mse's
 	mse_loss_avg = tf.reduce_mean(mse_loss) # average mse
 
 	loss = mse_loss_avg
