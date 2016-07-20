@@ -95,12 +95,11 @@ def train():
 	denom = tf.mul(tf.sqrt(tf.reduce_sum(tf.square(diff_1),0)),tf.sqrt(tf.reduce_sum(tf.square(diff_2),0)))
 	cc = tf.div(nom,denom)
 	avg_cc = tf.reduce_mean(cc)
-	loss = 1-avg_cc
-
 
 	mse_loss = tf.mul(loss, tf.square(output_stds)) # individual true mse's
 	mse_loss_avg = tf.reduce_mean(mse_loss) # average mse
 
+	loss = mse_loss_avg
 	#denorm_y_ = tf.add(tf.mul(y_, output_stds), output_means) # denormalized y_
 
 	#===================================================
