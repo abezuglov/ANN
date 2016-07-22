@@ -11,20 +11,22 @@ import lstm_loaddatasets as ld
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_boolean('train', False, 'When True, run training & save model. When False, load a previously saved model and evaluate it')
+flags.DEFINE_boolean('train', True, 'When True, run training & save model. When False, load a previously saved model and evaluate it')
 
 # Structure of the network
 flags.DEFINE_integer('num_nodes', 16, 'Size of the gates')
-flags.DEFINE_integer('batch_size', 50, 'Batch size')
+flags.DEFINE_integer('batch_size', 19*193, 'Batch size')
 flags.DEFINE_integer('num_unrollings', 10, 'Num unrollings')
 flags.DEFINE_integer('output_vars', 10, 'Size of the output layer')
 flags.DEFINE_integer('input_vars', 6, 'Size of the input layer')
+
+flags.DEFINE_integer('storm_length', 193, 'Length of each simulation')
 
 
 # Learning rate is important for model training. 
 # Decrease learning rate for more complicated models.
 # Increase if convergence is steady but too slow
-flags.DEFINE_float('learning_rate', 0.006, 'Initial learning rate')
+flags.DEFINE_float('learning_rate', 0.001, 'Initial learning rate')
 flags.DEFINE_float('learning_rate_decay', 0.5, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
 flags.DEFINE_integer('max_steps', 15001, 'Number of steps to run trainer')
 
@@ -38,13 +40,13 @@ flags.DEFINE_string('summaries_dir','./logs','Summaries directory')
 # Output dataset
 flags.DEFINE_string('output','./test_track_out.dat','When model evaluation, output the data here')
 # Input dataset
-flags.DEFINE_string('input','./test_track.dat','Dataset for input')
+flags.DEFINE_string('input','../data/ann_dataset_10points_combined.out','Dataset for input')
 #===================================================================================================
 
 def train():
 	train_dataset, valid_dataset, test_dataset = ld.read_data_sets(num_unrollings=FLAGS.num_unrollings, batch_size=FLAGS.batch_size)
+	
 	with tf.Graph().as_default(), tf.device('/cpu:0'):
-
 		# Create variables for input and output data moments and initialize them with train datasets' moments
 		input_means = tf.get_variable('means', trainable = False, initializer = tf.convert_to_tensor(train_dataset.input_moments[0]))
 		input_stds = tf.get_variable('stds', trainable = False, initializer = tf.convert_to_tensor(train_dataset.input_moments[1]))
@@ -130,6 +132,7 @@ def train():
 		with tf.control_dependencies([saved_sample_output.assign(sample_output), saved_sample_state.assign(sample_state)]):
 			sample_prediction = tf.nn.xw_plus_b(sample_output, w, b)
 
+	
 		init = tf.initialize_all_variables()
         	sess = tf.Session(config = tf.ConfigProto(
 			allow_soft_placement = False, # allows to utilize GPU's & CPU's
@@ -164,9 +167,11 @@ def train():
 
 				# calculate losses at validation dataset
 				
-				reset_sample_state.run(session = sess)
+				#reset_sample_state.run(session = sess)
 				predictions = np.zeros(shape=valid_dataset[1].shape)
 				for i in range(valid_dataset[0].shape[0]):
+					if i % FLAGS.storm_length == 0:
+						reset_sample_state.run(session = sess) # reset ANN at the beginning of a storm
 					predictions[i] = sample_prediction.eval(
 						{sample_input: np.reshape(valid_dataset[0][i,:],(1,FLAGS.input_vars))},
 						session = sess)
@@ -178,9 +183,10 @@ def train():
 				num_steps = 0
                  
 		print('=' * 80)
-		reset_sample_state.run(session = sess)
 		predictions = np.zeros(shape=test_dataset[1].shape)
 		for i in range(test_dataset[0].shape[0]):
+			if i % FLAGS.storm_length == 0:
+				reset_sample_state.run(session = sess) # reset ANN at the beginning of a storm
         		predictions[i] = sample_prediction.eval(
 				{sample_input: np.reshape(test_dataset[0][i,:],(1,FLAGS.input_vars))},
 				session = sess)
@@ -199,6 +205,7 @@ def run():
 	
 	# Assign datasets 
 	test_ds = np.loadtxt(FLAGS.input)[:,1:7].reshape((-1, 6)).astype(np.float32)
+	print(test_ds.shape)
 
 	with tf.Graph().as_default(), tf.device('/cpu:0'):
 
@@ -274,6 +281,9 @@ def run():
     
 		# Sampling and validation eval: batch 1, no unrolling.
 		sample_input = tf.placeholder(tf.float32, shape=[1,FLAGS.input_vars])
+
+		normalized_sample_input = tf.div(tf.sub(sample_input,means),stds) # normalize test inputs
+
 		saved_sample_output = tf.Variable(tf.zeros([1, FLAGS.num_nodes]))
 		saved_sample_state = tf.Variable(tf.zeros([1, FLAGS.num_nodes]))
     
@@ -282,7 +292,7 @@ def run():
 			saved_sample_state.assign(tf.zeros([1, FLAGS.num_nodes])))
     
 		sample_output, sample_state = lstm_cell(
-			sample_input, saved_sample_output, saved_sample_state)
+			normalized_sample_input, saved_sample_output, saved_sample_state)
     
 		with tf.control_dependencies([saved_sample_output.assign(sample_output), saved_sample_state.assign(sample_state)]):
 			sample_prediction = tf.nn.xw_plus_b(sample_output, w, b)
@@ -297,17 +307,20 @@ def run():
 
 		saver = tf.train.Saver()
 		ckpt = tf.train.get_checkpoint_state(FLAGS.checkpoints_dir)
-		if ckpt.model_checkpoint_path:
+		if ckpt is not None and ckpt.model_checkpoint_path:
 			saver.restore(sess, ckpt.model_checkpoint_path)
 			print("Model %s restored"%ckpt.model_checkpoint_path)
 		else:
 			print("Could not find any checkpoints at %s"%FLAGS.checkpoints_dir)
 			return
 
-		#tf.train.start_queue_runners(sess=sess)
-		reset_sample_state.run(session = sess)
+		tf.train.start_queue_runners(sess=sess)
+		#reset_sample_state.run(session = sess)
 		predictions = np.zeros(shape=(test_ds.shape[0],FLAGS.output_vars))
 		for i in range(test_ds.shape[0]):
+			if i % FLAGS.storm_length == 0:
+				#print("Reset model inputs -- winter is coming")
+				reset_sample_state.run(session = sess) # reset model for each storm
         		predictions[i] = sample_prediction.eval(
 				{sample_input: np.reshape(test_ds[i,:],(1,FLAGS.input_vars))},
 				session = sess)
