@@ -148,7 +148,6 @@ def Normalize(x, means, stds):
 def read_data_sets(directory = "../data/ann_dataset_10points", num_unrollings = 5, batch_size = 10):
 	file_names = [os.path.join(directory, d) for d in sorted(os.listdir(directory)) if os.path.isdir(directory)]
 	dataset = maybe_load(file_names)
-	print(dataset.shape)
 
 	# train, validation, and test dataset percentages
 	train_percent = 70
