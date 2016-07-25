@@ -24,7 +24,7 @@ flags.DEFINE_integer('batch_size', 19*193, 'Batch size. Divides evenly into the 
 #flags.DEFINE_string('train_dir', './data/', 'Directory to put the training data')
 
 # Save models in this directory
-flags.DEFINE_string('checkpoints_dir', './checkpoints', 'Directory to store checkpoints')
+flags.DEFINE_string('checkpoints_dir', './models/save_two_layers_15000_std', 'Directory to store checkpoints')
 
 # Statistics
 flags.DEFINE_string('summaries_dir','./logs','Summaries directory')
@@ -33,7 +33,7 @@ flags.DEFINE_string('summaries_dir','./logs','Summaries directory')
 # Output dataset
 flags.DEFINE_string('output','./test_track_out2.dat','When model evaluation, output the data here')
 # Input dataset
-flags.DEFINE_string('input','./test_track.dat','Dataset for input')
+flags.DEFINE_string('input','../data/ann_dataset_10points_combined.out','Dataset for input')
 
 def fill_feed_dict(data_set, inputs_pl, outputs_pl, train):
     """
@@ -75,28 +75,24 @@ def train():
                                 initializer = tf.convert_to_tensor(train_dataset.input_moments[0]))
         input_stds = tf.get_variable('input_stds', trainable = False, 
                                 initializer = tf.convert_to_tensor(train_dataset.input_moments[1]))
-        output_means = tf.get_variable('output_means', trainable = False, 
-                                initializer = tf.convert_to_tensor(train_dataset.output_moments[0]))
-	output_stds = tf.get_variable('output_stds', trainable = False, 
-                                initializer = tf.convert_to_tensor(train_dataset.output_moments[1]))
 
 	#===================================================
 	# Calculate losses for training and other ANN parameters for reporting
 	# 
 	#===================================================
-        norm_outputs = ilt.inference(x) # these are normalized, 'non-true' outputs
-	outputs = tf.add(tf.mul(norm_outputs, output_stds), output_means) # denormalized, true outputs
+        outputs = ilt.inference(x) # these are true outputs
+
         #loss = ilt.loss(norm_outputs, y_)
 
 	# calculate correlation coefficients on normalized data (should be identical to true values)
-	diff_1 = tf.sub(norm_outputs,tf.reduce_mean(norm_outputs))
+	diff_1 = tf.sub(outputs,tf.reduce_mean(outputs))
 	diff_2 = tf.sub(y_,tf.reduce_mean(y_))
 	nom = tf.reduce_sum(tf.mul(diff_1,diff_2),0)
 	denom = tf.mul(tf.sqrt(tf.reduce_sum(tf.square(diff_1),0)),tf.sqrt(tf.reduce_sum(tf.square(diff_2),0)))
 	cc = tf.div(nom,denom)
 	avg_cc = tf.reduce_mean(cc)
 
-	mse_loss = tf.mul(tf.square(norm_outputs-y_), tf.square(output_stds)) # individual true mse's
+	mse_loss = tf.square(outputs-y_) # individual true mse's
 	mse_loss_avg = tf.reduce_mean(mse_loss) # average mse
 
 	loss = mse_loss_avg
@@ -190,12 +186,11 @@ def run():
         # Prepare placeholders for inputs and expected outputs
         x = tf.placeholder(tf.float32, [None, FLAGS.input_vars], name='x-input')
 
-        means = tf.get_variable('means', shape=[FLAGS.input_vars], trainable = False)
-        stds = tf.get_variable('stds', shape=[FLAGS.input_vars], trainable = False)
+        input_means = tf.get_variable('input_means', shape=[FLAGS.input_vars], trainable = False)
+        input_stds = tf.get_variable('input_stds', shape=[FLAGS.input_vars], trainable = False)
 
         # Normalize input data
-        x_normalized = tf.div(tf.sub(x,means),stds)
-
+        x_normalized = tf.div(tf.sub(x,input_means),input_stds)
         outputs = ilt.inference(x_normalized)
 
         init = tf.initialize_all_variables()
