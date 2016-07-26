@@ -1,12 +1,12 @@
 import tensorflow as tf
 
-def weight_variable(name, shape):
+def weight_variable(name, shape, std = 0.1):
     """
     Returns a shared TF weight variable with given shape. The weights are normally distributed with mean = 0, stddev = 0.1
     shape -- shape of the variable, i.e. [4,5] matrix of 4x5
     """
     with tf.device('/cpu:0'):
-        initial = tf.truncated_normal_initializer(stddev = 0.1)
+        initial = tf.truncated_normal_initializer(stddev = std)
         var = tf.get_variable(name, shape, initializer = initial)
     return var
 
@@ -37,7 +37,7 @@ def variable_summaries(var, name):
     #tf.histogram_summary(name, var)
     #tf.scalar_summary(name+'/sparsity',tf.nn.zero_fraction(var))
 
-def nn_layer(input_tensor, input_dim, output_dim, layer_name, act = tf.tanh):
+def nn_layer(input_tensor, input_dim, output_dim, layer_name, act = tf.tanh, std = 0.1):
     """
     Creates and returns NN layer
     input_tensor -- TF tensor at layer input
@@ -47,7 +47,7 @@ def nn_layer(input_tensor, input_dim, output_dim, layer_name, act = tf.tanh):
     act -- nonlinear activation function
     """
     with tf.variable_scope(layer_name):
-        weights = weight_variable('weights',[input_dim, output_dim])
+        weights = weight_variable('weights',[input_dim, output_dim], std)
         #variable_summaries(weights, layer_name+'/weights')
 
         biases = bias_variable('biases',[output_dim])

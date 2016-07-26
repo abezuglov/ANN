@@ -93,7 +93,7 @@ class Dataset(object):
 	if normalize_data:
 		print("normalizing inputs and outputs")
 		self._inputs = (self._inputs - self._input_moments[0])/self._input_moments[1]
-		self._outputs = (self._outputs - self._output_moments[0])/self._output_moments[1]
+		#self._outputs = (self._outputs - self._output_moments[0])/self._output_moments[1]
 
 
     @property

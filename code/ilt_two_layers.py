@@ -21,7 +21,7 @@ flags.DEFINE_integer('input_vars', 6, 'Size of the input layer')
 # Increase if convergence is steady but too slow
 flags.DEFINE_float('learning_rate', 0.005, 'Initial learning rate')
 flags.DEFINE_float('learning_rate_decay', 0.5, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
-flags.DEFINE_integer('max_steps', 15001, 'Number of steps to run trainer')
+flags.DEFINE_integer('max_steps', 25001, 'Number of steps to run trainer')
 flags.DEFINE_float('moving_avg_decay', 0.999, 'Moving average decay for training variables')
 
 def inference(inputs):
@@ -31,8 +31,8 @@ def inference(inputs):
     train_prediction (return) -- network outputs
     """
     hidden_1 = aux.nn_layer(inputs, FLAGS.input_vars, FLAGS.hidden1, 'layer1')
-    hidden_2 = aux.nn_layer(hidden_1, FLAGS.hidden1, FLAGS.hidden2, 'layer2')
-    train_prediction = aux.nn_layer(hidden_2, FLAGS.hidden2, FLAGS.output_vars, 'output', act = None)      
+    hidden_2 = aux.nn_layer(hidden_1, FLAGS.hidden1, FLAGS.hidden2, 'layer2', act = tf.nn.relu)
+    train_prediction = aux.nn_layer(hidden_2, FLAGS.hidden2, FLAGS.output_vars, 'output', act = None, std = 0.5)      
     return train_prediction
 
 def loss(nn_outputs, true_outputs):

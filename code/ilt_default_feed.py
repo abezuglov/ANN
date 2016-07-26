@@ -76,11 +76,18 @@ def train():
         input_stds = tf.get_variable('input_stds', trainable = False, 
                                 initializer = tf.convert_to_tensor(train_dataset.input_moments[1]))
 
+	"""
+        output_means = tf.get_variable('output_means', trainable = False, 
+                                initializer = tf.convert_to_tensor(train_dataset.output_moments[0]))
+        output_stds = tf.get_variable('output_stds', trainable = False, 
+                                initializer = tf.convert_to_tensor(train_dataset.output_moments[1]))
+	"""
 	#===================================================
 	# Calculate losses for training and other ANN parameters for reporting
 	# 
 	#===================================================
-        outputs = ilt.inference(x) # these are true outputs
+        outputs = ilt.inference(x) # these are normalized outputs
+	#outputs = tf.add(tf.mul(norm_outputs,output_stds),output_means)
 
         #loss = ilt.loss(norm_outputs, y_)
 
@@ -92,7 +99,7 @@ def train():
 	cc = tf.div(nom,denom)
 	avg_cc = tf.reduce_mean(cc)
 
-	mse_loss = tf.square(outputs-y_) # individual true mse's
+	mse_loss = tf.reduce_mean(tf.square(outputs-y_),0) # individual true mse's
 	mse_loss_avg = tf.reduce_mean(mse_loss) # average mse
 
 	loss = mse_loss_avg
@@ -168,7 +175,6 @@ def train():
         feed_dict = fill_feed_dict(test_dataset, x, y_, train = False)
         test_loss_avg, test_loss, test_cc = sess.run([mse_loss_avg, mse_loss, cc], feed_dict = feed_dict)
         print('Test MSE: %.5f' % (np.float32(test_loss_avg).item()))
-
         for out_no in range(0,FLAGS.output_vars):
             print("Location %d: CC: %.4f, MSE: %.6f"%(out_no,test_cc[out_no],test_loss[out_no]))
 
@@ -189,9 +195,15 @@ def run():
         input_means = tf.get_variable('input_means', shape=[FLAGS.input_vars], trainable = False)
         input_stds = tf.get_variable('input_stds', shape=[FLAGS.input_vars], trainable = False)
 
+	"""
+        output_means = tf.get_variable('output_means', shape=[FLAGS.output_vars], trainable = False)
+        output_stds = tf.get_variable('output_stds', shape=[FLAGS.output_vars], trainable = False)
+	"""
+
         # Normalize input data
         x_normalized = tf.div(tf.sub(x,input_means),input_stds)
         outputs = ilt.inference(x_normalized)
+	#outputs = tf.add(tf.mul(norm_outputs,output_stds),output_means)
 
         init = tf.initialize_all_variables()
         sess = tf.Session(config = tf.ConfigProto(
