@@ -12,7 +12,7 @@ from sklearn.metrics import mean_squared_error
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_boolean('train', True, 'When True, run training & save model. When False, load a previously saved model and evaluate it')
+flags.DEFINE_boolean('train', False, 'When True, run training & save model. When False, load a previously saved model and evaluate it')
 
 # Split the training data into batches. Each hurricane is 193 records. Batch sizes are usually 2^k
 # When batch size equals to 0, or exceeds available data, use the whole dataset
@@ -76,30 +76,29 @@ def train():
         input_stds = tf.get_variable('input_stds', trainable = False, 
                                 initializer = tf.convert_to_tensor(train_dataset.input_moments[1]))
 
-	"""
         output_means = tf.get_variable('output_means', trainable = False, 
                                 initializer = tf.convert_to_tensor(train_dataset.output_moments[0]))
         output_stds = tf.get_variable('output_stds', trainable = False, 
                                 initializer = tf.convert_to_tensor(train_dataset.output_moments[1]))
-	"""
+
 	#===================================================
 	# Calculate losses for training and other ANN parameters for reporting
 	# 
 	#===================================================
-        outputs = ilt.inference(x) # these are normalized outputs
-	#outputs = tf.add(tf.mul(norm_outputs,output_stds),output_means)
+        norm_outputs = ilt.inference(x) # these are normalized outputs
+	outputs = tf.add(tf.mul(norm_outputs,output_stds),output_means)
 
         #loss = ilt.loss(norm_outputs, y_)
 
 	# calculate correlation coefficients on normalized data (should be identical to true values)
-	diff_1 = tf.sub(outputs,tf.reduce_mean(outputs))
+	diff_1 = tf.sub(norm_outputs,tf.reduce_mean(norm_outputs))
 	diff_2 = tf.sub(y_,tf.reduce_mean(y_))
 	nom = tf.reduce_sum(tf.mul(diff_1,diff_2),0)
 	denom = tf.mul(tf.sqrt(tf.reduce_sum(tf.square(diff_1),0)),tf.sqrt(tf.reduce_sum(tf.square(diff_2),0)))
 	cc = tf.div(nom,denom)
 	avg_cc = tf.reduce_mean(cc)
 
-	mse_loss = tf.reduce_mean(tf.square(outputs-y_),0) # individual true mse's
+	mse_loss = tf.mul(tf.reduce_mean(tf.square(norm_outputs-y_),0), tf.square(output_stds)) # individual true mse's
 	mse_loss_avg = tf.reduce_mean(mse_loss) # average mse
 
 	loss = mse_loss_avg
@@ -195,15 +194,12 @@ def run():
         input_means = tf.get_variable('input_means', shape=[FLAGS.input_vars], trainable = False)
         input_stds = tf.get_variable('input_stds', shape=[FLAGS.input_vars], trainable = False)
 
-	"""
         output_means = tf.get_variable('output_means', shape=[FLAGS.output_vars], trainable = False)
         output_stds = tf.get_variable('output_stds', shape=[FLAGS.output_vars], trainable = False)
-	"""
 
-        # Normalize input data
-        x_normalized = tf.div(tf.sub(x,input_means),input_stds)
-        outputs = ilt.inference(x_normalized)
-	#outputs = tf.add(tf.mul(norm_outputs,output_stds),output_means)
+        x_normalized = tf.div(tf.sub(x,input_means),input_stds) # normalize inputs
+        norm_outputs = ilt.inference(x_normalized) # read normalized outputs
+	outputs = tf.add(tf.mul(norm_outputs,output_stds),output_means) # denormalize outputs
 
         init = tf.initialize_all_variables()
         sess = tf.Session(config = tf.ConfigProto(
