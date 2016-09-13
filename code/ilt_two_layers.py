@@ -22,7 +22,7 @@ flags.DEFINE_integer('input_vars', 6, 'Size of the input layer')
 flags.DEFINE_float('learning_rate', 0.005, 'Initial learning rate')
 flags.DEFINE_float('learning_rate_decay', 0.5, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
 flags.DEFINE_integer('max_steps', 25001, 'Number of steps to run trainer')
-flags.DEFINE_float('moving_avg_decay', 0.999, 'Moving average decay for training variables')
+flags.DEFINE_float('moving_avg_decay', 0.5, 'Moving average decay for training variables')
 
 def inference(inputs):
     """

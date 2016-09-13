@@ -13,7 +13,7 @@ import tensorflow.python.client
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_boolean('train', True, ' If True, run training & save model, otherwise -- load a previously saved model and evaluate it')
+flags.DEFINE_boolean('train', False, ' If True, run training & save model, otherwise -- load a previously saved model and evaluate it')
 
 # Multi-GPU settings
 flags.DEFINE_integer('num_gpus',2,'Number of GPUs in the system')
@@ -22,10 +22,10 @@ flags.DEFINE_string('tower_name','ivy','Tower names')
 # Split the training data into batches. Each hurricane is 193 records. Batch sizes are usually 2^k
 # When batch size equals to 0, or exceeds available data, use the whole dataset
 # Large batch sizes produce more accurate update gradients, but the training is slower
-flags.DEFINE_integer('batch_size', 19*193, 'Batch size. Divides evenly into the dataset size of 193')
+flags.DEFINE_integer('batch_size', 57*193, 'Batch size. Divides evenly into the dataset size of 193')
 
 # Save models in this directory
-flags.DEFINE_string('checkpoints_dir', './checkpoints', 'Directory to store checkpoints')
+flags.DEFINE_string('checkpoints_dir', './models/save_two_layers_32_64_sept', 'Directory to store checkpoints')
 
 # Statistics
 flags.DEFINE_string('summaries_dir','./logs','Summaries directory')
@@ -123,11 +123,12 @@ def train():
         x = tf.placeholder(tf.float32, [None, FLAGS.input_vars], name='x-input') # Note: these are normalized inputs
         y_ = tf.placeholder(tf.float32, [None, FLAGS.output_vars], name = 'y-input')
 
-        # Create variables for input data moments and initialize them with train datasets' moments
-        means = tf.get_variable('means', trainable = False, 
-                                initializer = tf.convert_to_tensor(train_dataset.means))
-        stds = tf.get_variable('stds', trainable = False, 
-                                initializer = tf.convert_to_tensor(train_dataset.stds))
+        # Create variables for input and output data moments and initialize them with train datasets' moments
+        input_means = tf.get_variable('input_means', trainable = False, 
+                                initializer = tf.convert_to_tensor(train_dataset.input_moments[0]))
+        input_stds = tf.get_variable('input_stds', trainable = False, 
+                                initializer = tf.convert_to_tensor(train_dataset.input_moments[1]))
+
 
         global_step = tf.get_variable(
             'global_step', [], 
@@ -251,12 +252,12 @@ def run():
         # Prepare placeholders for inputs and expected outputs
         x = tf.placeholder(tf.float32, [None, FLAGS.input_vars], name='x-input')
 
-        means = tf.get_variable('means', shape=[FLAGS.input_vars], trainable = False)
-        stds = tf.get_variable('stds', shape=[FLAGS.input_vars], trainable = False)
+        input_means = tf.get_variable('input_means', shape=[FLAGS.input_vars], trainable = False)
+        input_stds = tf.get_variable('input_stds', shape=[FLAGS.input_vars], trainable = False)
 
         # Normalize input data
         # Here, the data is not normalized, so normalize it using save models' moments before running
-        x_normalized = tf.div(tf.sub(x,means),stds)
+        x_normalized = tf.div(tf.sub(x,input_means),input_stds)
 
         outputs = ilt.inference(x_normalized)
 

@@ -14,7 +14,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_boolean('train', True, 'When True, run training & save model. When False, load a previously saved model and evaluate it')
 
 # Structure of the network
-flags.DEFINE_integer('num_nodes', 16, 'Size of the gates')
+flags.DEFINE_integer('num_nodes', 20, 'Size of the gates')
 flags.DEFINE_integer('batch_size', 19*193, 'Batch size')
 flags.DEFINE_integer('num_unrollings', 10, 'Num unrollings')
 flags.DEFINE_integer('output_vars', 10, 'Size of the output layer')
@@ -26,21 +26,21 @@ flags.DEFINE_integer('storm_length', 193, 'Length of each simulation')
 # Learning rate is important for model training. 
 # Decrease learning rate for more complicated models.
 # Increase if convergence is steady but too slow
-flags.DEFINE_float('learning_rate', 0.001, 'Initial learning rate')
-flags.DEFINE_float('learning_rate_decay', 0.5, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
-flags.DEFINE_integer('max_steps', 15001, 'Number of steps to run trainer')
+flags.DEFINE_float('learning_rate', 0.0002, 'Initial learning rate')
+flags.DEFINE_float('learning_rate_decay', 0.02, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
+flags.DEFINE_integer('max_steps', 50001, 'Number of steps to run trainer')
 
 # Save models in this directory
-flags.DEFINE_string('checkpoints_dir', './checkpoints', 'Directory to store checkpoints')
+flags.DEFINE_string('checkpoints_dir', './checkpoints_isabel', 'Directory to store checkpoints')
 
 # Statistics
 flags.DEFINE_string('summaries_dir','./logs','Summaries directory')
 
 # Evaluation
 # Output dataset
-flags.DEFINE_string('output','./test_track_out.dat','When model evaluation, output the data here')
+flags.DEFINE_string('output','./test_tracks_out/lstm_fran_out.dat','When model evaluation, output the data here')
 # Input dataset
-flags.DEFINE_string('input','../data/ann_dataset_10points_combined.out','Dataset for input')
+flags.DEFINE_string('input','./test_tracks/fran_test_track.dat','Dataset for input')
 #===================================================================================================
 
 def train():
@@ -161,23 +161,20 @@ def train():
 
 			mean_loss += l
 			num_steps += 1
-			if step%(FLAGS.max_steps//20) == 0:
+			if step%(FLAGS.max_steps//100) == 0:
 				if step > 0:
 					mean_loss = mean_loss / num_steps
 
-				# calculate losses at validation dataset
-				
-				#reset_sample_state.run(session = sess)
-				predictions = np.zeros(shape=valid_dataset[1].shape)
-				for i in range(valid_dataset[0].shape[0]):
-					if i % FLAGS.storm_length == 0:
-						reset_sample_state.run(session = sess) # reset ANN at the beginning of a storm
-					predictions[i] = sample_prediction.eval(
-						{sample_input: np.reshape(valid_dataset[0][i,:],(1,FLAGS.input_vars))},
-						session = sess)
-				valid_mse = np.mean(np.square(predictions-valid_dataset[1]))
-				print('Step %d (%.2f op/sec): Training MSE: %.5f, Validation MSE: %.5f' % (
-			                    step, 1.0/duration, mean_loss, valid_mse))
+                                predictions = np.zeros(shape=valid_dataset[1].shape)
+                                for i in range(valid_dataset[0].shape[0]):
+                                        if i % FLAGS.storm_length == 0:
+                                                 reset_sample_state.run(session = sess) # reset ANN at the beginning of a storm
+                                        predictions[i] = sample_prediction.eval(
+                                                        {sample_input: np.reshape(valid_dataset[0][i,:],(1,FLAGS.input_vars))},
+                                                        session = sess)
+                                valid_mse = np.mean(np.square(predictions-valid_dataset[1]))
+                                print('Step %d (%.2f op/sec): Training MSE: %.5f, Validation MSE: %.5f' % (
+                                        step, 1.0/duration, mean_loss, valid_mse))
 				
 				mean_loss = 0
 				num_steps = 0

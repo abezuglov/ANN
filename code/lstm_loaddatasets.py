@@ -164,7 +164,8 @@ def read_data_sets(directory = "../data/ann_dataset_10points", num_unrollings = 
 
 	# Shuffle file indices
 	file_indices = range(dataset.shape[0])
-	np.random.shuffle(file_indices)
+        # turn off shuffling
+	#np.random.shuffle(file_indices)
 
 	# Assign datasets
 	test_dataset = np.array([dataset[j,:,:] for j in [file_indices[i] for i in range(test_start, valid_start)]])
