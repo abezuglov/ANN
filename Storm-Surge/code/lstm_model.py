@@ -14,9 +14,9 @@ FLAGS = flags.FLAGS
 flags.DEFINE_boolean('train', True, 'When True, run training & save model. When False, load a previously saved model and evaluate it')
 
 # Structure of the network
-flags.DEFINE_integer('num_nodes', 20, 'Size of the gates')
+flags.DEFINE_integer('num_nodes', 15, 'Size of the gates')
 flags.DEFINE_integer('batch_size', 19*193, 'Batch size')
-flags.DEFINE_integer('num_unrollings', 10, 'Num unrollings')
+flags.DEFINE_integer('num_unrollings', 35, 'Num unrollings')
 flags.DEFINE_integer('output_vars', 10, 'Size of the output layer')
 flags.DEFINE_integer('input_vars', 6, 'Size of the input layer')
 
@@ -28,7 +28,7 @@ flags.DEFINE_integer('storm_length', 193, 'Length of each simulation')
 # Increase if convergence is steady but too slow
 flags.DEFINE_float('learning_rate', 0.0002, 'Initial learning rate')
 flags.DEFINE_float('learning_rate_decay', 0.02, 'Learning rate decay, i.e. the fraction of the initial learning rate at the end of training')
-flags.DEFINE_integer('max_steps', 50001, 'Number of steps to run trainer')
+flags.DEFINE_integer('max_steps', 25001, 'Number of steps to run trainer')
 
 # Save models in this directory
 flags.DEFINE_string('checkpoints_dir', './checkpoints_isabel', 'Directory to store checkpoints')
@@ -161,7 +161,7 @@ def train():
 
 			mean_loss += l
 			num_steps += 1
-			if step%(FLAGS.max_steps//100) == 0:
+			if step%(FLAGS.max_steps//20) == 0:
 				if step > 0:
 					mean_loss = mean_loss / num_steps
 
